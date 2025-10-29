@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ObjectCard</class>
+ <widget class="QWidget" name="ObjectCard">
+  <property name="minimumSize">
+   <size>
+    <width>270</width>
+    <height>250</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>270</width>
+    <height>250</height>
+   </size>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+QWidget {
+    background-color: #403a3a;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+}
+   </string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_5">
+   <item>
+     <widget class="QLabel" name="object_image">
+      <property name="styleSheet">
+       <string notr="true">
+QLabel {
+    color: #666; 
+    font-style: italic; 
+    font-size: 12px;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    background-color: #2a2a2a;
+}
+QLabel:hover {border-color: #0078d7;}
+       </string>
+      </property>
+      <property name="text">
+       <string>Нет изображения</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_10">
+     <item>
+      <widget class="QLineEdit" name="object_name">
+       <property name="styleSheet">
+        <string notr="true">font-weight: bold; font-size: 13px; margin-left: 5px;</string>
+       </property>
+       <property name="text">
+        <string>Новый объект</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="object_delete">
+       <property name="styleSheet">
+        <string notr="true">
+QPushButton {
+    background-color: #8b0000;
+    color: white;
+    border: none;
+    font-size: 10px;
+}
+QPushButton:hover {border-color: #c00000ff;}
+        </string>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>❌</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
