@@ -82,8 +82,8 @@ QPushButton:hover {border-color: #c00000ff;}
        </property>
        <property name="maximumSize">
         <size>
-         <width>270</width>
-         <height>250</height>
+         <width>300</width>
+         <height>275</height>
         </size>
        </property>
        <property name="styleSheet">
