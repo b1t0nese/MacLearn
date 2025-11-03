@@ -34,16 +34,8 @@ class Project:
     def __init__(self, path: str):
         self.project_path = path
         self.project_paths = {
-            "dataset": {
-                "train": {},
-                "val": {}
-            },
-            "labels": {
-                "train": {},
-                "val": {}
-            },
-            "xexample_images": {},
-            "dataset.yaml": None,
+            "example_images": {},
+            "images": {},
             "project.conf": None
         }
         self.makedirs_ifnotexc()
@@ -123,9 +115,9 @@ class Project:
                 if "/" in subclass_data["example_image"]:
                     data["classes"][i]["subclasses"][j]["example_image"] = self.add_subclass_example_image(subclass_data)
         self.add_skipped_paths()
-        for file in self.project_paths["xexample_images"].keys():
+        for file in self.project_paths["example_images"].keys():
             if file not in self.get_all_example_images(data):
-                os.remove(self.get_full_path("xexample_images", file))
+                os.remove(self.get_full_path("example_images", file))
         self.add_skipped_paths()
         self.project = data
         with open(self.get_full_path("project.conf"), "w", encoding="utf-8") as f:
@@ -149,7 +141,7 @@ class Project:
     def add_subclass_example_image(self, subclass_data: dict) -> str:
         try:
             img_path = subclass_data["example_image"]
-            new_path = self.get_full_path("xexample_images")
+            new_path = self.get_full_path("example_images")
             new_filename = to_snake_case(subclass_data["search_query"])+\
                 "."+os.path.basename(img_path).split(".")[-1]
             new_path = os.path.join(new_path, new_filename)

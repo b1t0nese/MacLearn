@@ -1,5 +1,6 @@
 from PyQt6 import uic
-from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QFileDialog
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QHeaderView,
+                             QTableWidgetItem, QFileDialog, QLabel)
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import QTimer, Qt
 import os
@@ -14,13 +15,25 @@ class MainWindowUI(QMainWindow):
 
     def initUI(self):
         uic.loadUi(os.path.join(uis_path, "mainwindow.ui"), self)
+
         self.project_tab = uic.loadUi(os.path.join(uis_path, "tabs", "project_tab.ui"))
         self.tabWidget.addTab(self.project_tab, "Проект")
         self.project_tab.btn_add_class.clicked.connect(self.add_class)
         self.project_tab.class_objects = []
+
+        self.autodataset_tab = uic.loadUi(os.path.join(uis_path, "tabs", "autodataset_tab.ui"))
+        self.tabWidget.addTab(self.autodataset_tab, "Автодатасет")
+        self.setup_autodataset_interface()
+        self.autodataset_classes_status = {}
+        self.autodataset_main_status = {}
+
         self.resize_timer = QTimer()
         self.resize_timer.setSingleShot(True)
         self.resize_timer.timeout.connect(self.update_all_class_layouts)
+
+    def update_autodataset_statuses(self):
+        self.update_autodataset_classes_status()
+        self.visualise_autodataset_classes_status()
 
     def set_image(self, image_label: QLabel, image_path: str) -> bool:
         try:
@@ -37,6 +50,47 @@ class MainWindowUI(QMainWindow):
         except Exception as e:
             image_label.setText(f"Ошибка: {e}")
             return False
+
+
+    def setup_autodataset_interface(self):
+        self.autodataset_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.verticalLayout_left, 25)
+        self.autodataset_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.group_logs, 45)
+        self.autodataset_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.verticalLayout_right, 30)
+
+        header_classes = self.autodataset_tab.table_classes.horizontalHeader()
+        header_classes.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header_classes.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header_classes.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header_stages = self.autodataset_tab.table_stages.horizontalHeader()
+        header_stages.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header_stages.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+
+    def update_autodataset_classes_status(self):
+        local_classes_status = {}    
+        for class_obj in self.project_tab.class_objects:
+            if class_obj.class_checkbox.isChecked():
+                for subclass in class_obj.subclass_widgets:
+                    subclass_text = subclass.object_name.text()
+                    subclass_data = {
+                        "example_image": subclass.object_image.my_image_path,
+                        "class": class_obj.class_name.text(),
+                        "status": self.autodataset_classes_status[subclass_text]["status"]\
+                            if subclass_text in self.autodataset_classes_status\
+                                else f"0/{self.project_tab.spin_images_per_class.value()}"
+                    }
+                    local_classes_status[subclass_text] = subclass_data
+        self.autodataset_classes_status = local_classes_status.copy()
+
+    def visualise_autodataset_classes_status(self):
+        self.autodataset_tab.table_classes.setRowCount(len(self.autodataset_classes_status))
+        self.autodataset_tab.table_classes.setHorizontalHeaderLabels(["Класс", "Подкласс", "Статус"])
+        for r, subclass_data in enumerate(self.autodataset_classes_status.items()):
+            subclass_text, subclass = subclass_data
+            self.autodataset_tab.table_classes.setItem(r, 0, QTableWidgetItem(subclass["class"]))
+            self.autodataset_tab.table_classes.setItem(r, 1, QTableWidgetItem(subclass_text))
+            self.autodataset_tab.table_classes.setItem(r, 2, QTableWidgetItem(subclass["status"]))
+
+    ... # другие функции специально для "Автодатасет" табы
 
 
     def add_class(self, class_name: str = None, enabled: bool = True) -> QWidget:
