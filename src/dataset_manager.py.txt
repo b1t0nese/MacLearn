@@ -1,0 +1,30 @@
+project.sqlite
+
+таблица configuration
+key               | value
+validation_data   | true
+augmented_images  | true
+annotation        | true
+annotation_format | "YOLO"
+images_per_class  | 1500
+
+таблица classes_conf
+id | name               | enabled | subclasses
+0  | Гоночный транспорт | true    | [
+        {
+            "search_query": "спорткар maclaren",
+            "example_image": "sportkar_maclaren.jpg"
+        },
+        {
+            "search_query": "болид формула 1",
+            "example_image": "bolid_formula_1.jpg"
+        },
+        {
+            "search_query": "мотоцикл",
+            "example_image": "mototsikl.jpg"
+        }
+    ]
+ну и т.д...
+
+таблица dataset
+id | filename | class_id | type | annotation

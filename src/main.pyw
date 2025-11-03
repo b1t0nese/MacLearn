@@ -31,7 +31,7 @@ class App:
         for clas in self.project_data.project["classes"]:
             cur_class_widget = self.windowUI.add_class(clas["name"], clas["enabled"])
             for subclas in clas["subclasses"]:
-                img_fullpath = self.project_data.get_full_path("xexample_images", subclas["example_image"])\
+                img_fullpath = self.project_data.get_full_path("example_images", subclas["example_image"])\
                     if subclas["example_image"] else None
                 self.windowUI.add_subclass(
                     cur_class_widget, subclas["search_query"], img_fullpath)
@@ -68,6 +68,7 @@ class App:
             self.windowUI.initUI()
             self.config_window()
             self.init_project_data_in_window()
+            self.windowUI.update_autodataset_statuses()
             self.windowUI.show()
 
     def save_project(self):
@@ -95,6 +96,7 @@ class App:
                 })
             local_project["classes"].append(local_class)
         self.project_data.save(local_project)
+        self.windowUI.update_autodataset_statuses()
 
     def save_project_as(self):
         new_project_path = QFileDialog.getExistingDirectory(self.windowUI, "Выберите папку для сохранения")
