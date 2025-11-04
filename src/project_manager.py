@@ -163,12 +163,3 @@ class Project:
                     find_example_images(item)
         find_example_images(data)
         return example_images
-
-
-    def generate_yaml_config(self) -> bool:
-        """Генерирует dataset.yaml для YOLO"""
-        pass
-
-    def export_dataset(self, export_format: str = "YOLO") -> bool:
-        """Экспортирует датасет в указанном формате"""
-        pass
