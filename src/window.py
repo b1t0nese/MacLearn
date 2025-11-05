@@ -74,9 +74,9 @@ class MainWindowUI(QMainWindow):
                     subclass_data = {
                         "example_image": subclass.object_image.my_image_path,
                         "class": class_obj.class_name.text(),
-                        "status": self.autodataset_classes_status[subclass_text]["status"]\
-                            if subclass_text in self.autodataset_classes_status\
-                                else f"0/{self.project_tab.spin_images_per_class.value()}"
+                        "status": f"{self.autodataset_classes_status[subclass_text]["status"].split("/")[0]\
+                                     if subclass_text in self.autodataset_classes_status else 0}"+\
+                                        f"/{self.project_tab.spin_images_per_class.value()}"
                     }
                     local_classes_status[subclass_text] = subclass_data
         self.autodataset_classes_status = local_classes_status.copy()
