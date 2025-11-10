@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QHeaderView,
                              QTableWidgetItem, QFileDialog, QLabel)
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import QTimer, Qt
+from datetime import datetime
 import os
 
 uis_path = os.path.join(os.path.dirname(__file__), "uis")
@@ -31,32 +32,15 @@ class MainWindowUI(QMainWindow):
         self.resize_timer.setSingleShot(True)
         self.resize_timer.timeout.connect(self.update_all_class_layouts)
 
+
     def update_autodataset_statuses(self):
         self.update_autodataset_classes_status()
         self.visualise_autodataset_classes_status()
-
-    def set_image(self, image_label: QLabel, image_path: str) -> bool:
-        try:
-            pixmap = QPixmap.fromImage(QImage(image_path))
-            image_label.setPixmap(
-                pixmap.scaled(
-                    image_label.parent().width(), image_label.parent().height(),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                ))
-            image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            image_label.my_image_path = image_path
-            return True
-        except Exception as e:
-            image_label.setText(f"Ошибка: {e}")
-            return False
-
 
     def setup_autodataset_interface(self):
         self.autodataset_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.verticalLayout_left, 25)
         self.autodataset_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.group_logs, 45)
         self.autodataset_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.verticalLayout_right, 30)
-
         header_classes = self.autodataset_tab.table_classes.horizontalHeader()
         header_classes.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header_classes.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -76,10 +60,14 @@ class MainWindowUI(QMainWindow):
                         "class": class_obj.class_name.text(),
                         "status": f"{self.autodataset_classes_status[subclass_text]["status"].split("/")[0]\
                                      if subclass_text in self.autodataset_classes_status else 0}"+\
-                                        f"/{self.project_tab.spin_images_per_class.value()}"
+                                        f"/{self.project_tab.spin_images_per_class.value()//len(class_obj.subclass_widgets)}"
                     }
                     local_classes_status[subclass_text] = subclass_data
         self.autodataset_classes_status = local_classes_status.copy()
+
+    def update_autodataset_subclass_status(self, subclass_name: str, status: int):
+        self.autodataset_classes_status[subclass_name]["status"] = f"{status}/{self.autodataset_classes_status[subclass_name]["status"].split("/")[1]}"
+        self.visualise_autodataset_classes_status()
 
     def visualise_autodataset_classes_status(self):
         self.autodataset_tab.table_classes.setRowCount(len(self.autodataset_classes_status))
@@ -90,8 +78,39 @@ class MainWindowUI(QMainWindow):
             self.autodataset_tab.table_classes.setItem(r, 1, QTableWidgetItem(subclass_text))
             self.autodataset_tab.table_classes.setItem(r, 2, QTableWidgetItem(subclass["status"]))
 
+    def autodataset_log(self, text: str, otstup: int=0):
+        self.autodataset_tab.text_logs.append('\n'*otstup+f'[{datetime.now().strftime("%H:%M:%S")}] {text}')
+
+    def autodataset_set_image(self, image_path: str):
+        pixmap = QPixmap.fromImage(QImage(image_path))
+        self.autodataset_tab.label_image.setPixmap(
+            pixmap.scaled(
+                self.autodataset_tab.label_image.width(),
+                self.autodataset_tab.label_image.height(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
+        self.autodataset_tab.label_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.autodataset_tab.label_image_path.setText(image_path)
+
     ... # другие функции специально для "Автодатасет" табы
 
+
+    def set_obj_card_image(self, image_label: QLabel, image_path: str) -> bool:
+        try:
+            pixmap = QPixmap.fromImage(QImage(image_path))
+            image_label.setPixmap(
+                pixmap.scaled(
+                    image_label.parent().width(), image_label.parent().height(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                ))
+            image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            image_label.my_image_path = image_path
+            return True
+        except Exception as e:
+            image_label.setText(f"Ошибка: {e}")
+            return False
 
     def add_class(self, class_name: str = None, enabled: bool = True) -> QWidget:
         class_widget = uic.loadUi(os.path.join(uis_path, "widgets", "class_field.ui"))
@@ -134,7 +153,7 @@ class MainWindowUI(QMainWindow):
         parent_class.subclass_widgets.append(object_card)
         object_card.object_image.my_image_path = ""
         if subclass_image:
-            self.set_image(object_card.object_image, subclass_image)
+            self.set_obj_card_image(object_card.object_image, subclass_image)
         object_card.object_image.mousePressEvent = lambda event:\
             self.subclass_image_click(object_card.object_image, event)
         if search_text:
@@ -148,7 +167,7 @@ class MainWindowUI(QMainWindow):
         file_dialog.setNameFilter("Images (*.png *.jpg)")
         path, ok = file_dialog.getOpenFileName()
         if ok:
-            self.set_image(label, path)
+            self.set_obj_card_image(label, path)
 
     def delete_subclass(self, subclass_widget, parent_class=None):
         if parent_class is None and hasattr(subclass_widget, 'parent_class'):

@@ -1,12 +1,17 @@
-from project_manager import Project
 from window import MainWindowUI
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
+from PyQt6.QtCore import QThread
 import sys
+
+from project_manager import Project
+from autodataset import AutoDataset
 
 
 
 class App:
     def __init__(self):
+        self.autodataset_worker = None
+        self.autodataset_worker_thread = None
         self.open_project()
 
     def start(self, app):
@@ -22,6 +27,7 @@ class App:
     def config_window(self):
         self.windowUI.setWindowTitle(f'{self.windowUI.windowTitle()} ("{self.project_data.project_path}")')
         self.windowUI.project_tab.btn_save_project.clicked.connect(self.save_project)
+        self.windowUI.autodataset_tab.btn_start.clicked.connect(self.toggle_autodataset_work)
         self.windowUI.actionOpen.triggered.connect(self.open_project)
         self.windowUI.actionSave.triggered.connect(self.save_project)
         self.windowUI.actionSave_As.triggered.connect(self.save_project_as)
@@ -42,16 +48,21 @@ class App:
         pr_tab.cb_annotation.setChecked(project_conf["configuration"]["annotation"])
         pr_tab.combo_annotation_format.setCurrentText(project_conf["configuration"]["annotation_format"])
         pr_tab.spin_images_per_class.setValue(project_conf["configuration"]["images_per_class"])
+        pr_tab.combo_images_size.setCurrentText(project_conf["configuration"]["images_size"])
 
 
     def open_project(self, project_path: str = None) -> bool:
         if not project_path:
             project_path = QFileDialog.getExistingDirectory(
                 None, "Выберите папку проекта", "")
+
         if project_path:
             if hasattr(self, 'windowUI') and self.windowUI:
                 self.windowUI.close()
                 self.windowUI.deleteLater()
+            if hasattr(self, 'autodataset_worker') and self.autodataset_worker:
+                self.autodataset_worker.driver.quit()
+                self.autodataset_worker = None
             self.windowUI = MainWindowUI()
             if not Project.path_is_project(project_path):
                 reply = QMessageBox.question(
@@ -64,12 +75,17 @@ class App:
                 elif reply == QMessageBox.StandardButton.No:
                     self.open_project()
                     return
+
             self.project_data = Project(project_path)
+            self.autodataset_worker = AutoDataset(self.project_data)
             self.windowUI.initUI()
             self.config_window()
             self.init_project_conf_in_window()
             self.windowUI.update_autodataset_statuses()
             self.windowUI.show()
+
+        else:
+            sys.exit()
 
     def save_project(self):
         pr_tab = self.windowUI.project_tab
@@ -79,7 +95,8 @@ class App:
                 "augmented_images": pr_tab.cb_augmented_images.isChecked(),
                 "annotation": pr_tab.cb_annotation.isChecked(),
                 "annotation_format": pr_tab.combo_annotation_format.currentText(),
-                "images_per_class": pr_tab.spin_images_per_class.value()
+                "images_per_class": pr_tab.spin_images_per_class.value(),
+                "images_size": pr_tab.combo_images_size.currentText()
             },
             "classes_conf": []
         }
@@ -112,6 +129,39 @@ class App:
                     self.open_project(new_project_path)
             else:
                 QMessageBox.warning(self.windowUI, "Ошибка", message)
+
+
+    def toggle_autodataset_work(self):
+        if self.autodataset_worker_thread:
+            self.stop_autodataset()
+        else:
+            self.start_autodataset()
+
+    def start_autodataset(self):
+        self.autodataset_thread = QThread()
+        self.autodataset_worker.moveToThread(self.autodataset_thread)
+
+        self.autodataset_thread.started.connect(self.autodataset_worker.run)
+        self.autodataset_worker.finished.connect(self.stop_autodataset)
+
+        self.autodataset_worker.log_field.connect(self.windowUI.autodataset_log)
+        self.autodataset_worker.cur_image_label.connect(self.windowUI.autodataset_set_image)
+        self.autodataset_worker.subclass_updated.connect(self.windowUI.update_autodataset_subclass_status)
+        # self.autodataset_worker.stage_updated.connect(self.windowUI.update_autodataset_stage_status)
+
+        self.autodataset_thread.start()
+        self.windowUI.autodataset_tab.btn_start.setText("Стоп")
+        self.windowUI.autodataset_tab.btn_start.setStyleSheet("background-color: #f44336;")
+
+    def stop_autodataset(self):
+        if hasattr(self, 'autodataset_worker') and self.autodataset_worker:
+            self.autodataset_worker.stop()
+        if hasattr(self, 'autodataset_thread') and self.autodataset_thread:
+            self.autodataset_worker.finished.connect(self.autodataset_thread.quit)
+            self.autodataset_thread.finished.connect(self.autodataset_thread.deleteLater)
+            self.autodataset_thread = None
+        self.windowUI.autodataset_tab.btn_start.setText("Запуск")
+        self.windowUI.autodataset_tab.btn_start.setStyleSheet("background-color: #4CAF50;")
 
 
 
