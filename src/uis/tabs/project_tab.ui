@@ -2,6 +2,14 @@
 <ui version="4.0">
  <class>ProjectTab</class>
  <widget class="QWidget" name="ProjectTab">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>760</width>
+    <height>500</height>
+   </rect>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
    <item>
     <widget class="QGroupBox" name="classes_group">
@@ -28,8 +36,8 @@
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>1136</width>
-           <height>509</height>
+           <width>720</width>
+           <height>279</height>
           </rect>
          </property>
          <layout class="QVBoxLayout" name="classes_vertical_layout"/>
@@ -78,7 +86,7 @@
            <string notr="true">font-size: 13px;</string>
           </property>
           <property name="text">
-           <string>Создание валидационных данных</string>
+           <string>Установка валидационных данных</string>
           </property>
          </widget>
         </item>
@@ -138,6 +146,11 @@
          <layout class="QHBoxLayout" name="horizontalLayout_2">
           <item>
            <widget class="QLabel" name="label_2">
+            <property name="font">
+             <font>
+              <pointsize>8</pointsize>
+             </font>
+            </property>
             <property name="styleSheet">
              <string notr="true">font-size: 13px;</string>
             </property>
@@ -169,6 +182,81 @@
             <property name="value">
              <number>100</number>
             </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item row="2" column="1">
+         <layout class="QHBoxLayout" name="horizontalLayout_3">
+          <item>
+           <widget class="QLabel" name="label_3">
+            <property name="font">
+             <font>
+              <pointsize>9</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>Размер изображений:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="combo_images_size">
+            <property name="font">
+             <font>
+              <pointsize>9</pointsize>
+             </font>
+            </property>
+            <item>
+             <property name="text">
+              <string>320x240</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>416x320</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>640x360</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>608x448</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>640x480</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>800x600</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>832x640</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>854x480</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>1024x768</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>1280x720</string>
+             </property>
+            </item>
            </widget>
           </item>
          </layout>
