@@ -1,12 +1,10 @@
-# Старая фигня версия автодатасет класса, который я делал под ткинтер
-# Будет подвержен сильному рефакторингу
-
-
-
 import io
 import random
 import time
+import subprocess
 import threading
+import platform
+import os
 from urllib.parse import quote as url_quote
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from selenium.webdriver.common.action_chains import ActionChains
@@ -15,7 +13,6 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from undetected_chromedriver import Chrome
-import win32clipboard
 import requests
 import cv2
 import numpy as np
@@ -23,6 +20,94 @@ from PIL import Image
 from rembg import remove as removefon
 
 from project_manager import Project
+
+
+
+class ClipboardManager:
+    def __init__(self):
+        self.system = platform.system().lower()
+        self._win32clipboard = None
+        if self.system=="windows":
+            self._import_windows_libs()
+        elif self.system=="linux":
+            self._check_linux_deps()
+
+    def _import_windows_libs(self):
+        if self._win32clipboard is None:
+            try:
+                import win32clipboard
+                self._win32clipboard = win32clipboard
+            except ImportError:
+                raise ImportError("Для работы с буфером обмена в Windows установите pywin32: pip install pywin32")
+
+    def _check_linux_deps(self):
+        if not self._check_command_exists("xclip"):
+            raise RuntimeError("Установите xclip для работы с буфером обмена.")
+
+    def _check_command_exists(self, command):
+        try:
+            subprocess.run([command, "-version"], 
+                         stdout=subprocess.DEVNULL, 
+                         stderr=subprocess.DEVNULL,
+                         check=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+
+    def copy_image_to_clipboard(self, image_path):
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"File not found: {image_path}")
+        image = Image.open(image_path)
+        if self.system=="windows":
+            self._copy_windows(image)
+        elif self.system=="linux":
+            self._copy_linux(image)
+        elif self.system=="darwin":
+            self._copy_macos(image)
+        else:
+            raise NotImplementedError(f"System {self.system} not supported")
+
+    def _copy_windows(self, image):
+        output = io.BytesIO()
+        image.convert("RGB").save(output, "BMP")
+        data = output.getvalue()[14:]
+        output.close()
+        if self._win32clipboard:
+            self._win32clipboard.OpenClipboard()
+            self._win32clipboard.EmptyClipboard()
+            self._win32clipboard.SetClipboardData(self._win32clipboard.CF_DIB, data)
+            self._win32clipboard.CloseClipboard()
+
+    def _copy_linux(self, image):
+        if self._check_linux_deps():
+            temp_path = "/tmp/clipboard_image.png"
+            try:
+                image.save(temp_path, "PNG")
+                subprocess.run([
+                    "xclip", "-selection", "clipboard", 
+                    "-t", "image/png", 
+                    "-i", temp_path
+                ], capture_output=True, text=True, check=True)
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(f"Ошибка xclip: {e.stderr}")
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
+    def _copy_macos(self, image):
+        temp_path = "/tmp/clipboard_image.png"
+        try:
+            image.save(temp_path, "PNG")
+            subprocess.run([
+                "osascript", "-e", 
+                f'set the clipboard to (read (POSIX file "{temp_path}") as PNG picture)'
+            ], capture_output=True, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Ошибка AppleScript: {e.stderr}")
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
 
 
@@ -121,6 +206,7 @@ class AutoDataset(QObject):
         super().__init__()
         self._is_running = False
         self.driver = Chrome(headless=headless_chrome)
+        self.clipboard_manager = ClipboardManager()
         self.project_manager = project_manager
         self.current_status_data = None
 
@@ -135,20 +221,11 @@ class AutoDataset(QObject):
         self.log_field.emit('Поиск изображений...', 0)
         self.driver.get("https://yandex.ru/images")
 
-        search_box = self.driver.find_element(By.NAME, "text")
-
         if subclass_data["example_image"]:
-            image = Image.open(self.project_manager.get_full_path(
+            self.clipboard_manager.copy_image_to_clipboard(self.project_manager.get_full_path(
                 "example_images", subclass_data["example_image"]))
-            output = io.BytesIO()
-            image.convert("RGB").save(output, "BMP")
-            data = output.getvalue()[14:]
-            output.close()
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
-            win32clipboard.CloseClipboard()
 
+            search_box = self.driver.find_element(By.NAME, "text")
             ActionChains(self.driver).key_down(Keys.CONTROL).send_keys("v")\
                 .key_up(Keys.CONTROL).perform()
             time.sleep(0.5)
@@ -159,10 +236,10 @@ class AutoDataset(QObject):
                     By.CSS_SELECTOR, ".CbirIntent.cbir-intent.cbir-intent_visible_yes.i-bem.cbir-intent_js_inited.cbir-intent_loaded_yes")))
             search_box = WebDriverWait(self.driver, 5).until(
                 EC.presence_of_element_located((By.TAG_NAME, "textarea")))
-
             search_box.send_keys(subclass_data["search_query"])
             time.sleep(0.5)
             search_box.send_keys(Keys.ENTER)
+
             while True:
                 try:
                     WebDriverWait(self.driver, 10).until(

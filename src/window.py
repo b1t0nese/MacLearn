@@ -4,9 +4,15 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QHeaderView,
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import QTimer, Qt
 from datetime import datetime
+import sys
 import os
 
-uis_path = os.path.join(os.path.dirname(__file__), "uis")
+
+if getattr(sys, 'frozen', False):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.dirname(__file__)
+uis_path = os.path.join(base_path, "uis")
 
 
 
