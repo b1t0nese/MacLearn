@@ -18,10 +18,17 @@ class App:
         self.appApplication = app
         sys.exit(self.appApplication.exec())
 
-    def close_application(self):
-        if hasattr(self, "appApplication") and hasattr(self, "windowUI"):
+    def close_application(self, event=None):
+        if hasattr(self, "appApplication") and hasattr(self, "windowUI") and self.appApplication and self.windowUI:
+            if self.autodataset_worker:
+                self.autodataset_worker.driver.quit()
             self.windowUI.close()
             self.appApplication.quit()
+        if event:
+            if hasattr(self.windowUI, 'original_close_event'):
+                self.windowUI.original_close_event(event)
+            else:
+                event.accept()
 
 
     def config_window(self):
@@ -32,6 +39,8 @@ class App:
         self.windowUI.actionSave.triggered.connect(self.save_project)
         self.windowUI.actionSave_As.triggered.connect(self.save_project_as)
         self.windowUI.actionExit.triggered.connect(self.close_application)
+        self.windowUI.original_close_event = self.windowUI.closeEvent
+        self.windowUI.closeEvent = self.close_application.__get__(self, type(self.windowUI))
 
     def init_project_conf_in_window(self):
         project_conf = self.project_data.get_project_conf()

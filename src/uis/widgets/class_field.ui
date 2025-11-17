@@ -3,7 +3,15 @@
  <class>ClassField</class>
  <widget class="QWidget" name="ClassField">
   <property name="styleSheet">
-   <string notr="true">background-color: #000000ff; border: 1px solid #ccc; border-radius: 5px; padding: 10px;</string>
+   <string notr="true">
+QWidget {
+    background-color: palette(window);
+    border: 1px solid palette(mid);
+    border-radius: 5px;
+    padding: 10px;
+    color: palette(window-text);
+}
+   </string>
   </property>
   <property name="sizePolicy">
    <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -24,7 +32,20 @@
      <item>
       <widget class="QLineEdit" name="class_name">
        <property name="styleSheet">
-        <string notr="true">font-size: 13px; font-weight: bold;</string>
+        <string notr="true">
+QLineEdit {
+    font-size: 13px;
+    font-weight: bold;
+    background-color: palette(base);
+    color: palette(text);
+    border: 1px solid palette(mid);
+    border-radius: 4px;
+    padding: 2px 5px;
+}
+QLineEdit:focus {
+    border-color: palette(highlight);
+}
+        </string>
        </property>
        <property name="text">
         <string>Новый класс</string>
@@ -49,12 +70,19 @@
        <property name="styleSheet">
         <string notr="true">
 QPushButton {
-    background-color: #8b0000;
-    color: white;
-    border: none;
+    background-color: palette(button);
+    color: palette(button-text);
+    border: 1px solid palette(mid);
     font-size: 10px;
+    border-radius: 4px;
 }
-QPushButton:hover {border-color: #c00000ff;}
+QPushButton:hover {
+    background-color: palette(dark);
+    border-color: palette(highlight);
+}
+QPushButton:pressed {
+    background-color: palette(shadow);
+}
         </string>
        </property>
        <property name="text">
@@ -89,16 +117,16 @@ QPushButton:hover {border-color: #c00000ff;}
        <property name="styleSheet">
         <string notr="true">
 QPushButton {
-    background-color: #403a3a;
-    border: 2px dashed #ccc;
+    background-color: palette(alternate-base);
+    border: 2px dashed palette(mid);
     border-radius: 8px;
     font-size: 28px;
     font-weight: bold;
-    color: #666;
+    color: palette(placeholder-text);
 }
 QPushButton:hover {
-    border-color: #0078d7;
-    color: #0078d7;
+    border-color: palette(highlight);
+    color: palette(highlight);
 }
         </string>
        </property>
