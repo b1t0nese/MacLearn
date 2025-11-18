@@ -8,7 +8,7 @@ def generate_html_schema(db_path, output_file=None):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
-    html_content = '''<!DOCTYPE html>
+    html_content = """<!DOCTYPE html>
 <html>
 <head>
     <title>Database Schema</title>
@@ -183,7 +183,7 @@ def generate_html_schema(db_path, output_file=None):
         </div>
 
         <div class="schema-container" id="schemaContainer">
-'''
+"""
 
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
     tables = cur.fetchall()
@@ -198,10 +198,10 @@ def generate_html_schema(db_path, output_file=None):
         top = row * 300 + 50
 
         table_data[table_name] = {
-            'id': f'table_{table_name}',
-            'left': left,
-            'top': top,
-            'columns': []
+            "id": f"table_{table_name}",
+            "left": left,
+            "top": top,
+            "columns": [],
         }
 
         cur.execute(f"PRAGMA table_info({table_name});")
@@ -212,12 +212,14 @@ def generate_html_schema(db_path, output_file=None):
             col_id, col_name, col_type, not_null, default_val, pk = col
 
             attributes = []
-            if pk: 
+            if pk:
                 attributes.append('<span class="pk-badge">PK</span>')
-            if not_null: 
+            if not_null:
                 attributes.append('<span class="not-null">NOT NULL</span>')
-            if default_val: 
-                attributes.append(f'<span class="default-value">DEFAULT {default_val}</span>')
+            if default_val:
+                attributes.append(
+                    f'<span class="default-value">DEFAULT {default_val}</span>'
+                )
 
             attr_html = " ".join(attributes)
             pk_class = "pk" if pk else ""
@@ -232,15 +234,13 @@ def generate_html_schema(db_path, output_file=None):
         </div>
         """
 
-            table_data[table_name]['columns'].append({
-                'name': col_name,
-                'type': col_type,
-                'pk': pk
-            })
+            table_data[table_name]["columns"].append(
+                {"name": col_name, "type": col_type, "pk": pk}
+            )
 
         cur.execute(f"SELECT COUNT(*) FROM {table_name};")
         count = cur.fetchone()[0]
-        
+
         html_content += f"""
     <div class="table-card" id="table_{table_name}" style="left: {left}px; top: {top}px;">
         <div class="table-header">
@@ -258,17 +258,20 @@ def generate_html_schema(db_path, output_file=None):
 
         cur.execute(f"PRAGMA foreign_key_list({table_name});")
         foreign_keys = cur.fetchall()
-        
+
         for fk in foreign_keys:
             _, _, ref_table, from_col, to_col, *_ = fk
-            relationships.append({
-                'from_table': table_name,
-                'from_column': from_col,
-                'to_table': ref_table,
-                'to_column': to_col
-            })
+            relationships.append(
+                {
+                    "from_table": table_name,
+                    "from_column": from_col,
+                    "to_table": ref_table,
+                    "to_column": to_col,
+                }
+            )
 
-    html_content += """
+    html_content += (
+        """
         </div>
         
         <svg class="relationship-container" id="relationshipSVG"></svg>
@@ -277,7 +280,9 @@ def generate_html_schema(db_path, output_file=None):
     <script>
         function drawRelationships() {
             const svg = document.getElementById('relationshipSVG');
-            const relationships = """ + str(relationships).replace("'", '"') + """;
+            const relationships = """
+        + str(relationships).replace("'", '"')
+        + """;
 
             svg.innerHTML = `
                 <defs>
@@ -410,10 +415,11 @@ def generate_html_schema(db_path, output_file=None):
     </script>
 </body>
 </html>"""
-    
-    with open(output_file, 'w', encoding='utf-8') as f:
+    )
+
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write(html_content)
-    
+
     conn.close()
     print(f"🎉 Интерактивная HTML-схема сохранена как: {output_file}")
     print("✨ Возможности:")
