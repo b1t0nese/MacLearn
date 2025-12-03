@@ -7,3 +7,6 @@ Pillow
 requests
 pywin32
 filetype
+standard-distutils
+onnxruntime
+qdarkstyle
