@@ -17,10 +17,8 @@
   <property name="styleSheet">
    <string notr="true">
 QWidget {
-    background-color: palette(window);
-    border: 2px solid palette(mid);
+    border: 2px solid #ccc;
     border-radius: 8px;
-    color: palette(window-text);
 }
    </string>
   </property>
@@ -33,7 +31,7 @@ QLabel {
     color: palette(placeholder-text); 
     font-style: italic; 
     font-size: 12px;
-    border: 2px solid transparent;
+    border: 2px solid #ccc;
     border-radius: 4px;
     background-color: palette(alternate-base);
 }
@@ -57,14 +55,9 @@ QLabel:hover {
        <property name="styleSheet">
         <string notr="true">
 QLineEdit {
-    font-weight: bold; 
-    font-size: 13px; 
+    font-weight: bold;
+    font-size: 13px;
     margin-left: 5px;
-    background-color: palette(base);
-    color: palette(text);
-    border: 1px solid palette(mid);
-    border-radius: 4px;
-    padding: 2px 5px;
 }
 QLineEdit:focus {
     border-color: palette(highlight);
@@ -86,7 +79,7 @@ QLineEdit:focus {
 QPushButton {
     background-color: palette(button);
     color: palette(button-text);
-    border: 1px solid palette(mid);
+    border: 1px solid palette(midlight);
     font-size: 10px;
     border-radius: 4px;
 }

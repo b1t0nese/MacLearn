@@ -5,11 +5,9 @@
   <property name="styleSheet">
    <string notr="true">
 QWidget {
-    background-color: palette(window);
-    border: 1px solid palette(mid);
+    border: 2px solid #ccc;
     border-radius: 5px;
     padding: 10px;
-    color: palette(window-text);
 }
    </string>
   </property>
@@ -36,11 +34,6 @@ QWidget {
 QLineEdit {
     font-size: 13px;
     font-weight: bold;
-    background-color: palette(base);
-    color: palette(text);
-    border: 1px solid palette(mid);
-    border-radius: 4px;
-    padding: 2px 5px;
 }
 QLineEdit:focus {
     border-color: palette(highlight);
@@ -72,7 +65,7 @@ QLineEdit:focus {
 QPushButton {
     background-color: palette(button);
     color: palette(button-text);
-    border: 1px solid palette(mid);
+    border: 1px solid palette(midlight);
     font-size: 10px;
     border-radius: 4px;
 }
@@ -118,7 +111,7 @@ QPushButton:pressed {
         <string notr="true">
 QPushButton {
     background-color: palette(alternate-base);
-    border: 2px dashed palette(mid);
+    border: 2px dashed #ccc;
     border-radius: 8px;
     font-size: 28px;
     font-weight: bold;

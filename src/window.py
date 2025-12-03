@@ -1,6 +1,12 @@
 from PyQt6 import uic
-from PyQt6.QtWidgets import (QMainWindow, QWidget, QHeaderView,
-                             QTableWidgetItem, QFileDialog, QLabel)
+from PyQt6.QtWidgets import (
+    QMainWindow,
+    QWidget,
+    QHeaderView,
+    QTableWidgetItem,
+    QFileDialog,
+    QLabel,
+)
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import QTimer, Qt
 from datetime import datetime
@@ -27,7 +33,9 @@ class MainWindowUI(QMainWindow):
         self.project_tab.btn_add_class.clicked.connect(self.add_class)
         self.project_tab.class_objects = []
 
-        self.autodataset_tab = uic.loadUi(os.path.join(uis_path, "tabs", "autodataset_tab.ui"))
+        self.autodataset_tab = uic.loadUi(
+            os.path.join(uis_path, "tabs", "autodataset_tab.ui")
+        )
         self.tabWidget.addTab(self.autodataset_tab, "Автодатасет")
         self.setup_autodataset_interface()
         self.autodataset_classes_status = {}
@@ -42,9 +50,15 @@ class MainWindowUI(QMainWindow):
         self.visualise_autodataset_classes_status()
 
     def setup_autodataset_interface(self):
-        self.autodataset_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.verticalLayout_left, 25)
-        self.autodataset_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.group_logs, 45)
-        self.autodataset_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.verticalLayout_right, 30)
+        self.autodataset_tab.horizontalLayout.setStretchFactor(
+            self.autodataset_tab.verticalLayout_left, 25
+        )
+        self.autodataset_tab.horizontalLayout.setStretchFactor(
+            self.autodataset_tab.group_logs, 45
+        )
+        self.autodataset_tab.horizontalLayout.setStretchFactor(
+            self.autodataset_tab.verticalLayout_right, 30
+        )
         header_classes = self.autodataset_tab.table_classes.horizontalHeader()
         header_classes.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header_classes.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -70,22 +84,34 @@ class MainWindowUI(QMainWindow):
         self.autodataset_classes_status = local_classes_status.copy()
 
     def update_autodataset_subclass_status(self, subclass_name: str, status: int):
-        self.autodataset_classes_status[subclass_name]["status"
+        self.autodataset_classes_status[subclass_name][
+            "status"
         ] = f"{status}/{self.autodataset_classes_status[subclass_name]["status"].split("/")[1]}"
         self.visualise_autodataset_classes_status()
 
     def visualise_autodataset_classes_status(self):
-        self.autodataset_tab.table_classes.setRowCount(len(self.autodataset_classes_status))
-        self.autodataset_tab.table_classes.setHorizontalHeaderLabels(["Класс", "Подкласс", "Статус"])
+        self.autodataset_tab.table_classes.setRowCount(
+            len(self.autodataset_classes_status)
+        )
+        self.autodataset_tab.table_classes.setHorizontalHeaderLabels(
+            ["Класс", "Подкласс", "Статус"]
+        )
         for r, subclass_data in enumerate(self.autodataset_classes_status.items()):
             subclass_text, subclass = subclass_data
-            self.autodataset_tab.table_classes.setItem(r, 0, QTableWidgetItem(subclass["class"]))
-            self.autodataset_tab.table_classes.setItem(r, 1, QTableWidgetItem(subclass_text))
-            self.autodataset_tab.table_classes.setItem(r, 2, QTableWidgetItem(subclass["status"]))
+            self.autodataset_tab.table_classes.setItem(
+                r, 0, QTableWidgetItem(subclass["class"])
+            )
+            self.autodataset_tab.table_classes.setItem(
+                r, 1, QTableWidgetItem(subclass_text)
+            )
+            self.autodataset_tab.table_classes.setItem(
+                r, 2, QTableWidgetItem(subclass["status"])
+            )
 
     def autodataset_log(self, text: str, otstup: int = 0):
         self.autodataset_tab.text_logs.append(
-            "\n" * otstup + f'[{datetime.now().strftime("%H:%M:%S")}] {text}')
+            "\n" * otstup + f'[{datetime.now().strftime("%H:%M:%S")}] {text}'
+        )
 
     def autodataset_set_image(self, image_path: str):
         pixmap = QPixmap.fromImage(QImage(image_path))
@@ -95,7 +121,8 @@ class MainWindowUI(QMainWindow):
                 self.autodataset_tab.label_image.height(),
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
-        ))
+            )
+        )
         self.autodataset_tab.label_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.autodataset_tab.label_image_path.setText(image_path)
 
@@ -110,7 +137,8 @@ class MainWindowUI(QMainWindow):
                     image_label.parent().height(),
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
-            ))
+                )
+            )
             image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             image_label.my_image_path = image_path
             return True
@@ -125,8 +153,12 @@ class MainWindowUI(QMainWindow):
         class_widget.subclass_widgets = []
         class_widget.grid_layout = class_widget.class_grid_layout
         class_widget.class_checkbox.stateChanged.connect(self.show_class)
-        class_widget.class_delete.clicked.connect(lambda: self.delete_class(class_widget))
-        class_widget.class_add_subclass.clicked.connect(lambda: self.add_subclass(class_widget))
+        class_widget.class_delete.clicked.connect(
+            lambda: self.delete_class(class_widget)
+        )
+        class_widget.class_add_subclass.clicked.connect(
+            lambda: self.add_subclass(class_widget)
+        )
         if class_name:
             class_widget.class_name.setText(class_name)
         class_widget.class_checkbox.setChecked(enabled)
@@ -149,8 +181,9 @@ class MainWindowUI(QMainWindow):
         class_widget.deleteLater()
         self.project_tab.class_objects.remove(class_widget)
 
-    def add_subclass(self, parent_class, search_text: str = None,
-                     subclass_image: str = None) -> QWidget:
+    def add_subclass(
+        self, parent_class, search_text: str = None, subclass_image: str = None
+    ) -> QWidget:
         object_card = uic.loadUi(os.path.join(uis_path, "widgets", "object_card.ui"))
         object_card.object_delete.clicked.connect(
             lambda: self.delete_subclass(object_card, parent_class)
@@ -196,7 +229,9 @@ class MainWindowUI(QMainWindow):
         spacing = 10
         if container_width <= 0:
             return
-        max_subclasses_per_row = max(1, (container_width - spacing) // (subclass_width + spacing))
+        max_subclasses_per_row = max(
+            1, (container_width - spacing) // (subclass_width + spacing)
+        )
 
         for i in reversed(range(class_widget.grid_layout.count())):
             item = class_widget.grid_layout.itemAt(i)
