@@ -17,13 +17,40 @@ def get_image_type(image_bytes: bytes) -> str:
 
 def to_snake_case(text: str) -> str:
     translit_dict = {
-        "а": "a", "б": "b", "в": "v", "г": "g", "д": "d",
-        "е": "e", "ё": "yo", "ж": "zh", "з": "z", "и": "i",
-        "й": "y", "к": "k", "л": "l", "м": "m", "н": "n",
-        "о": "o", "п": "p", "р": "r", "с": "s", "т": "t",
-        "у": "u", "ф": "f", "х": "h", "ц": "ts", "ч": "ch",
-        "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "",
-        "э": "e", "ю": "yu", "я": "ya", " ": "_",
+        "а": "a",
+        "б": "b",
+        "в": "v",
+        "г": "g",
+        "д": "d",
+        "е": "e",
+        "ё": "yo",
+        "ж": "zh",
+        "з": "z",
+        "и": "i",
+        "й": "y",
+        "к": "k",
+        "л": "l",
+        "м": "m",
+        "н": "n",
+        "о": "o",
+        "п": "p",
+        "р": "r",
+        "с": "s",
+        "т": "t",
+        "у": "u",
+        "ф": "f",
+        "х": "h",
+        "ц": "ts",
+        "ч": "ch",
+        "ш": "sh",
+        "щ": "sch",
+        "ъ": "",
+        "ы": "y",
+        "ь": "",
+        "э": "e",
+        "ю": "yu",
+        "я": "ya",
+        " ": "_",
     }
     text = text
     result = []
@@ -96,7 +123,8 @@ class Dataset:
             for key, value in conf_data.items():
                 cur.execute(
                     "INSERT INTO configuration(key, value)" + " VALUES(?, ?)",
-                    (key, str(value)))
+                    (key, str(value)),
+                )
             con.commit()
 
     def get_configutation(self) -> dict:
@@ -122,12 +150,14 @@ class Dataset:
                 class_id = result[0]
                 cur.execute(
                     "UPDATE classes_conf SET enabled = ?, subclasses = ? WHERE id = ?",
-                    (enabled, json.dumps(subclasses, ensure_ascii=False), class_id))
+                    (enabled, json.dumps(subclasses, ensure_ascii=False), class_id),
+                )
             else:
                 cur.execute(
                     "INSERT INTO classes_conf (class_name, enabled, subclasses) "
                     + "VALUES (?, ?, ?)",
-                    (class_name, enabled, json.dumps(subclasses, ensure_ascii=False)))
+                    (class_name, enabled, json.dumps(subclasses, ensure_ascii=False)),
+                )
                 class_id = cur.lastrowid
             con.commit()
             return class_id
@@ -139,12 +169,14 @@ class Dataset:
             cur = con.cursor()
             cur.execute(
                 "SELECT id FROM classes_conf " + "WHERE id = ? OR class_name = ?",
-                (class_id, class_name))
+                (class_id, class_name),
+            )
             if not cur.fetchone():
                 return False
             cur.execute(
                 "DELETE FROM classes_conf " + "WHERE id = ? OR class_name = ?",
-                (class_id, class_name))
+                (class_id, class_name),
+            )
             con.commit()
             return True
 
@@ -156,7 +188,9 @@ class Dataset:
             result = dict(
                 cur.execute(
                     "SELECT * FROM classes_conf WHERE id = ? OR class_name = ?",
-                    (class_id, class_name)).fetchone())
+                    (class_id, class_name),
+                ).fetchone()
+            )
             if result:
                 result["enabled"] = bool(result["enabled"])
                 result["subclasses"] = json.loads(result["subclasses"])
@@ -173,8 +207,13 @@ class Dataset:
                 result.append(class_data)
             return result
 
-    def save_image(self, image_bytes: bytes, class_id: int,
-                   type: str = "default", annotation: list = []) -> int:
+    def save_image(
+        self,
+        image_bytes: bytes,
+        class_id: int,
+        type: str = "default",
+        annotation: list = [],
+    ) -> int:
         with self.get_connection() as con:
             img_type = get_image_type(image_bytes)
             if img_type:
@@ -184,7 +223,9 @@ class Dataset:
                 cur = con.cursor()
                 cur.execute(
                     "INSERT INTO dataset(filename, class_id, type, annotation) "
-                    + "VALUES(?, ?, ?, ?)", (filename, class_id, type, json.dumps(annotation)))
+                    + "VALUES(?, ?, ?, ?)",
+                    (filename, class_id, type, json.dumps(annotation)),
+                )
                 con.commit()
                 return int(cur.lastrowid)
 
@@ -200,7 +241,8 @@ class Dataset:
                     return False
             cur.execute(
                 "DELETE FROM dataset " + "WHERE id = ? OR filename = ?",
-                (image_id, filename))
+                (image_id, filename),
+            )
             con.commit()
             try:
                 os.remove(os.path.join(self.images_path, filename))
@@ -214,7 +256,9 @@ class Dataset:
             result = dict(
                 cur.execute(
                     "SELECT * FROM dataset WHERE id = ? OR filename = ?",
-                    (image_id, filename)).fetchone())
+                    (image_id, filename),
+                ).fetchone()
+            )
             result["annotation"] = json.loads(result["annotation"])
             return result
 
@@ -312,7 +356,9 @@ class Project(Dataset):
         for i, class_data in enumerate(classes_conf):
             for j, subclass_data in enumerate(class_data["subclasses"]):
                 if "/" in subclass_data["example_image"]:
-                    classes_conf[i]["subclasses"][j]["example_image"] = self.add_subclass_example_image(subclass_data)
+                    classes_conf[i]["subclasses"][j]["example_image"] = (
+                        self.add_subclass_example_image(subclass_data)
+                    )
         self.add_skipped_paths()
         for file in self.project_paths["example_images"].keys():
             if file not in self.find_all_values_by_key(classes_conf, "example_image"):
@@ -322,7 +368,9 @@ class Project(Dataset):
         for class_data in classes_conf:
             self.add_or_upd_class_conf(**class_data)
         for class_data in self.get_all_classes_conf():
-            if class_data["class_name"] not in [clasdat["class_name"] for clasdat in classes_conf]:
+            if class_data["class_name"] not in [
+                clasdat["class_name"] for clasdat in classes_conf
+            ]:
                 self.del_class_conf(class_data["id"])
 
     def save_as(self, to_path: str) -> tuple:
@@ -386,10 +434,15 @@ if __name__ == "__main__":  # Тест работы БД, вводим путь 
             "images_size": "320x240",
         }
     )
-    print("Configuration:", json.dumps(dataset.get_configutation(), indent=2, ensure_ascii=False), "\n")
+    print(
+        "Configuration:",
+        json.dumps(dataset.get_configutation(), indent=2, ensure_ascii=False),
+        "\n",
+    )
     dataset.add_or_upd_class_conf("Гоночный транспорт")
     dataset.add_or_upd_class_conf(
-        "Гоночный транспорт", subclasses=[
+        "Гоночный транспорт",
+        subclasses=[
             {
                 "search_query": "спорткар maclaren",
                 "example_image": "sportkar_maclaren.jpg",
@@ -399,7 +452,8 @@ if __name__ == "__main__":  # Тест работы БД, вводим путь 
         ],
     )
     dataset.add_or_upd_class_conf(
-        "Городской транспорт", False,
+        "Городской транспорт",
+        False,
         [
             {"search_query": "Автобус", "example_image": ""},
             {"search_query": "Троллейбус", "example_image": ""},
@@ -409,7 +463,9 @@ if __name__ == "__main__":  # Тест работы БД, вводим путь 
     dataset.del_class_conf(class_name="Ненужный класс")
     print(
         'Class "Городской транспорт" data:',
-        dataset.get_class_conf(class_name="Городской транспорт"), "\n")
+        dataset.get_class_conf(class_name="Городской транспорт"),
+        "\n",
+    )
     print("All classes data:", dataset.get_all_classes_conf(), "\n")
     import requests, random
 
@@ -421,13 +477,18 @@ if __name__ == "__main__":  # Тест работы БД, вводим путь 
             image_request.content,
             random.randint(1, len(dataset.get_all_classes_conf())),
             random.choice(["default", "augment"]),
-            [random.randint(0, 100) / 100 for i in range(4)])
+            [random.randint(0, 100) / 100 for i in range(4)],
+        )
     for i in range(1, 500, 2):
         dataset.del_image(i)
     print(f"Image {image_id} data:", dataset.get_image(image_id), "\n")
     print(
         f'Images from class "Гоночный транспорт" data:',
-        str(dataset.get_images(dataset.get_class_conf(class_name="Гоночный транспорт")["id"])
-        )[:1000] + "...\n",
+        str(
+            dataset.get_images(
+                dataset.get_class_conf(class_name="Гоночный транспорт")["id"]
+            )
+        )[:1000]
+        + "...\n",
     )
     print("All images data:", str(dataset.get_images())[:1000] + "...")
