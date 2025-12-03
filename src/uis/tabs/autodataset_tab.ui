@@ -266,12 +266,11 @@ QLabel {
          <property name="styleSheet">
           <string notr="true">
 QLabel {
-    color: #cccccc; 
     font-size: 13px; 
     font-weight: bold;
     padding: 8px; 
     qproperty-alignment: AlignCenter;
-    background-color: #2a2a2a;
+    background-color: palette(alternate-base);
     border-radius: 4px;
     margin: 5px;
 }
