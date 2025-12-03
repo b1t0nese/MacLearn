@@ -1,4 +1,6 @@
 # MacLearn
+![Python](https://img.shields.io/badge/Python-3.12+-blue.svg) [requirements.txt](https://github.com/ArtemChikc/MacLearn/blob/main/requirements.txt)
+
 Программа, которая за считанные минуты соберёт для вас качественный датасет из тысяч изображений, скачанных из интернета.
 
 ## О проекте
