@@ -7,8 +7,7 @@
 
 **MacLearn** — это программа для автоматического сбора и подготовки качественных датасетов из изображений, скачанных из интернета. Система создана для разработчиков ML-моделей, исследователей и всех, кто работает с компьютерным зрением.
 
-[**Скачать программу**](https://github.com/ArtemChikc/MacLearn/releases/tag/maclearn_releases)
-[**Скачать Chrome (нужен для работы программы)**](https://www.google.com/chrome/)
+[**Скачать программу**](https://github.com/ArtemChikc/MacLearn/releases/tag/maclearn_releases) | [**Скачать Chrome (нужен для работы программы)**](https://www.google.com/chrome/)
 
 [**📋 Пояснительная записка**](https://github.com/ArtemChikc/MacLearn/blob/main/doc/пояснительная%20записка.md)
 
