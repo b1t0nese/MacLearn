@@ -9,6 +9,8 @@
 
 [**Скачать программу**](https://github.com/ArtemChikc/MacLearn/releases/tag/maclearn_releases) | [**Скачать Chrome (нужен для работы программы)**](https://www.google.com/chrome/)
 
+**Использовать последнюю версию Chrome!** *(если программа не запустилась, возможно дело в старой версии браузера или в его отсутствии)*
+
 [**📋 Пояснительная записка**](https://github.com/ArtemChikc/MacLearn/blob/main/doc/пояснительная%20записка.md)
 
 [**🖥️ Презентация**](https://github.com/ArtemChikc/MacLearn/blob/main/doc/презентация.pptx)
