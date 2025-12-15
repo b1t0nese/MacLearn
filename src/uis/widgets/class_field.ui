@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>ClassField</class>
+ <class>ClassFieldWidget</class>
  <widget class="QWidget" name="ClassField">
   <property name="styleSheet">
    <string notr="true">
@@ -22,6 +22,19 @@ QWidget {
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <item>
       <widget class="QCheckBox" name="class_checkbox">
+       <property name="styleSheet">
+        <string notr="true">
+QCheckBox {
+    border: 2px solid #ccc;
+    border-radius: 5px;
+    padding: 6px;
+}
+QCheckBox::indicator {
+    width: 20px;
+    height: 20px;
+}
+        </string>
+       </property>
        <property name="checked">
         <bool>true</bool>
        </property>
@@ -32,11 +45,11 @@ QWidget {
        <property name="styleSheet">
         <string notr="true">
 QLineEdit {
-    font-size: 13px;
+    border: 2px solid #ccc;
+    border-radius: 5px;
+    padding: 6px;
+    font-size: 14px;
     font-weight: bold;
-}
-QLineEdit:focus {
-    border-color: palette(highlight);
 }
         </string>
        </property>
@@ -45,7 +58,7 @@ QLineEdit:focus {
        </property>
       </widget>
      </item>
-     <item>
+     <!-- <item>
       <spacer name="horizontalSpacer_3">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
@@ -57,7 +70,7 @@ QLineEdit:focus {
         </size>
        </property>
       </spacer>
-     </item>
+     </item> -->
      <item>
       <widget class="QPushButton" name="class_delete">
        <property name="styleSheet">
@@ -94,7 +107,7 @@ QPushButton:pressed {
       <number>10</number>
      </property>
      <item row="0" column="0">
-      <widget class="QPushButton" name="class_add_subclass">
+      <widget class="QPushButton" name="class_add_object">
        <property name="minimumSize">
         <size>
          <width>270</width>
