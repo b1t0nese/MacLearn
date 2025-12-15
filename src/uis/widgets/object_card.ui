@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>ObjectCard</class>
+ <class>ObjectCardWidget</class>
  <widget class="QWidget" name="ObjectCard">
   <property name="minimumSize">
    <size>
@@ -16,10 +16,7 @@
   </property>
   <property name="styleSheet">
    <string notr="true">
-QWidget {
-    border: 2px solid #ccc;
-    border-radius: 8px;
-}
+QWidget {padding: 2px;}
    </string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -32,7 +29,6 @@ QLabel {
     font-style: italic; 
     font-size: 12px;
     border: 2px solid #ccc;
-    border-radius: 4px;
     background-color: palette(alternate-base);
 }
 QLabel:hover {
@@ -59,10 +55,19 @@ QLineEdit {
     font-size: 13px;
     margin-left: 5px;
 }
-QLineEdit:focus {
-    border-color: palette(highlight);
-}
         </string>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>30</height>
+        </size>
        </property>
        <property name="text">
         <string>Новый объект</string>
@@ -93,6 +98,12 @@ QPushButton:pressed {
         </string>
        </property>
        <property name="maximumSize">
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="minimumSize">
         <size>
          <width>30</width>
          <height>30</height>

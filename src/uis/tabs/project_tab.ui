@@ -121,12 +121,12 @@
              <string notr="true">font-size: 13px;</string>
             </property>
             <property name="text">
-             <string>Формат аннотации:</string>
+             <string>Формат датасета:</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QComboBox" name="combo_annotation_format">
+           <widget class="QComboBox" name="combo_dataset_format">
             <property name="styleSheet">
              <string notr="true">font-size: 13px;</string>
             </property>
