@@ -253,7 +253,7 @@ class AutoDataset(QObject):
                 else:
                     image_elements = self.driver.find_elements(
                         By.CSS_SELECTOR, ".ImagesContentImage-Image.ImagesContentImage-Image_clickable")
-                if len(image_elements)>images_count:
+                if len(image_elements)<=images_count:
                     try:
                         self.driver.find_element(By.XPATH, "//button[.//span[text()='Показать ещё']]").click()
                     except: break
@@ -326,4 +326,5 @@ class AutoDataset(QObject):
     @pyqtSlot()
     def stop(self):
         self._is_running = False
+
         self.log_field.emit("Работа скоро остановится, пожалуйста не закрывайте это окно.\n", 1)
