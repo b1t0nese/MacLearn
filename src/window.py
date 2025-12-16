@@ -305,12 +305,13 @@ class MainWindowUI(QMainWindow):
             if class_obj.class_checkbox.isChecked():
                 for object in class_obj.objects_widgets:
                     object_text = object.object_name.text()
+                    images_per_subclass = self.project_tab.spin_images_per_class.value()//len(class_obj.objects_widgets)
+                    images_per_subclass += images_per_subclass//5 if self.project_tab.cb_validation_data.isChecked() else 0
                     object_data = {
                         "example_image": object.object_image.my_image_path,
                         "class": class_obj.class_name.text(),
                         "status": f"{self.autodataset_classes_status[object_text]["status"].split("/")[0]\
-                                     if object_text in self.autodataset_classes_status else 0}"+\
-                                        f"/{self.project_tab.spin_images_per_class.value()//len(class_obj.objects_widgets)}"
+                                     if object_text in self.autodataset_classes_status else 0}/{images_per_subclass}"
                     }
                     local_classes_status[object_text] = object_data
         self.autodataset_classes_status = local_classes_status.copy()

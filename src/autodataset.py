@@ -198,7 +198,12 @@ class AutoDataset(QObject):
 
 
     def download_images(self, subclass_data: dict, num_images: int,
-                        class_id: int, size: tuple=None):
+                        class_id: int, size: tuple=None, validation_data: bool=False):
+        if validation_data:
+            images_count = num_images+(num_images//5)
+            self.log_field.emit('INFO: Установка валидационных данных включена.\n', 0)
+        else: images_count = num_images
+
         self.log_field.emit('Поиск изображений...', 0)
         self.driver.get("https://yandex.ru/images")
         self.chrome_widget_lock.emit(True)
@@ -220,7 +225,7 @@ class AutoDataset(QObject):
             time.sleep(0.5)
             search_box.send_keys(Keys.ENTER)
 
-            while True:
+            while self._is_running:
                 try:
                     WebDriverWait(self.driver, 10).until(
                         EC.presence_of_element_located((
@@ -235,7 +240,7 @@ class AutoDataset(QObject):
         self.log_field.emit('Идёт прогрузка изображений...', 0)
         new_height = self.driver.execute_script("return document.body.scrollHeight")
         last_height = self.driver.execute_script("return document.body.scrollHeight")
-        while True:
+        while self._is_running:
             scroll_st = time.time()
             while new_height==last_height:
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -248,36 +253,36 @@ class AutoDataset(QObject):
                 else:
                     image_elements = self.driver.find_elements(
                         By.CSS_SELECTOR, ".ImagesContentImage-Image.ImagesContentImage-Image_clickable")
-                if len(image_elements)>num_images:
-                    break
-                else:
+                if len(image_elements)>images_count:
                     try:
                         self.driver.find_element(By.XPATH, "//button[.//span[text()='Показать ещё']]").click()
                     except: break
+                else: break
             last_height = new_height
 
         self.log_field.emit('Скачивание изображений...', 1)
         downloaded_images_count = 0
         for id, img in enumerate(image_elements):
             try:
-                if size:
-                    self.driver.execute_script("arguments[0].scrollIntoView();", img)
-                    self.driver.execute_script("arguments[0].click();", img)
-                    img_src = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.CLASS_NAME, "MMImage-Origin"))).get_attribute('src')
-                    self.driver.find_element(By.CSS_SELECTOR, ".Button.ImagesViewer-Close").click()
-                else:
-                    img_src = img.get_attribute('src')
-                response = requests.get(img_src)
-                if response.status_code==200:
-                    image_id = self.project_manager.save_image(response.content, class_id)
-                    downloaded_images_count += 1
-                    self.subclass_updated.emit(subclass_data["search_query"], downloaded_images_count)
-                    self.log_field.emit(f"Скачан файл {downloaded_images_count}/{num_images}, id: {id}", 0)
-                    self.cur_image_label.emit(self.project_manager.get_full_path(
-                        "images", self.project_manager.get_image(image_id)["filename"]))
-                if downloaded_images_count>=num_images or not self._is_running:
-                    break
+                if downloaded_images_count<images_count and self._is_running:
+                    if size:
+                        self.driver.execute_script("arguments[0].scrollIntoView();", img)
+                        self.driver.execute_script("arguments[0].click();", img)
+                        img_src = WebDriverWait(self.driver, 10).until(
+                            EC.presence_of_element_located((By.CLASS_NAME, "MMImage-Origin"))).get_attribute('src')
+                        self.driver.find_element(By.CSS_SELECTOR, ".Button.ImagesViewer-Close").click()
+                    else:
+                        img_src = img.get_attribute('src')
+                    response = requests.get(img_src)
+                    if response.status_code==200:
+                        image_id = self.project_manager.save_image(
+                            response.content, class_id, "validation" if validation_data and id+1>=num_images else "default")
+                        downloaded_images_count += 1
+                        self.subclass_updated.emit(subclass_data["search_query"], downloaded_images_count)
+                        self.log_field.emit(f"Скачан файл {downloaded_images_count}/{images_count}, id: {id}", 0)
+                        self.cur_image_label.emit(self.project_manager.get_full_path(
+                            "images", self.project_manager.get_image(image_id)["filename"]))
+                else: break
             except Exception as e:
                 self.log_field.emit(f"Ошибка при скачивании файла: {e}. Id: {id}", 0)
 
@@ -304,7 +309,8 @@ class AutoDataset(QObject):
             for subclass_data in class_data["subclasses"]:
                 if class_data["enabled"] and self._is_running:
                     img_counts = self.project_data["configuration"]["images_per_class"]//len(class_data["subclasses"])
-                    self.download_images(subclass_data, img_counts, class_data["class_id"], size=size)
+                    self.download_images(subclass_data, img_counts, class_data["class_id"], size,
+                                         self.project_data["configuration"]["validation_data"])
         self.log_field.emit('Готово! Изображения скачаны.\n', 1)
 
         if not self._is_running:
