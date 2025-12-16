@@ -70,7 +70,7 @@ class ObjectCardWidget(QWidget):
         file_dialog.setNameFilter("Images (*.png *.jpg)")
         path, ok = file_dialog.getOpenFileName()
         if ok:
-            self.set_object_image(self.object_image, path)
+            self.update_object_image(path)
 
 
 
@@ -83,7 +83,7 @@ class ClassFieldWidget(QWidget):
         uic.loadUi(os.path.join(uis_path, "widgets", "class_field.ui"), self)
         self.class_checkbox.stateChanged.connect(self.show_class)
         self.class_delete.clicked.connect(self.delete_class)
-        self.class_add_object.clicked.connect(self.add_object)
+        self.class_add_object.clicked.connect(lambda: (self.add_object(), self.update_layout()))
         self.class_checkbox.setChecked(enabled)
         if class_name:
             self.class_name.setText(class_name)
@@ -114,7 +114,7 @@ class ClassFieldWidget(QWidget):
         object_card = ObjectCardWidget()
         object_card.initUI(object_name=object_name, object_image=object_image, click_image=click_image)
         object_card.object_delete.clicked.connect(
-            lambda: self.delete_object(object_card))
+            lambda: (self.delete_object(object_card), self.update_layout()))
         self.objects_widgets.append(object_card)
         return object_card
 
@@ -133,32 +133,22 @@ class ClassFieldWidget(QWidget):
 
 
     def update_layout(self):
-        if self.width()<=0 or not self.objects_widgets:
+        if self.width() <= 0 or not self.objects_widgets:
             return
-        max_subclasses_per_row = max(1, (self.width()-10)//(self.objects_widgets[0].minimumWidth()+10))
 
-        if len(self.objects_widgets)!=max_subclasses_per_row or len(self.objects_widgets)+1!=self.class_grid_layout.count():
-            for i, widget in enumerate(self.objects_widgets):
-                row = i//max_subclasses_per_row
-                col = i%max_subclasses_per_row
-                if self.class_grid_layout.indexOf(widget)==-1:
-                    self.class_grid_layout.addWidget(widget, row, col)
-                else:
-                    current_index = self.class_grid_layout.indexOf(widget)
-                    current_row, current_col, row_span, col_span = (
-                        self.class_grid_layout.getItemPosition(current_index))
-                    if current_row!=row or current_col!=col:
-                        self.class_grid_layout.addWidget(widget, row, col)
+        all_widgets = self.objects_widgets + [self.class_add_object]
+        widget_width = all_widgets[0].minimumWidth() if all_widgets[0].minimumWidth() > 0 else 100
+        max_subclasses_per_row = max(1, (self.width() - 10) // (widget_width + 10))
 
-            last_row = len(self.objects_widgets)//max_subclasses_per_row
-            last_col = len(self.objects_widgets)%max_subclasses_per_row
-            if self.class_grid_layout.indexOf(self.class_add_object)==-1:
-                self.class_grid_layout.addWidget(self.class_add_object, last_row, last_col)
+        for i, widget in enumerate(all_widgets):
+            row, col = i // max_subclasses_per_row, i % max_subclasses_per_row
+            current_index = self.class_grid_layout.indexOf(widget)
+            if current_index == -1:
+                self.class_grid_layout.addWidget(widget, row, col)
             else:
-                current_row, current_col, _, _ = self.class_grid_layout.getItemPosition(
-                    self.class_grid_layout.indexOf(self.class_add_object))
-                if current_row!=last_row or current_col!=last_col:
-                    self.class_grid_layout.addWidget(self.class_add_object, last_row, last_col)
+                current_row, current_col, row_span, col_span = self.class_grid_layout.getItemPosition(current_index)
+                if current_row != row or current_col != col:
+                    self.class_grid_layout.addWidget(widget, row, col)
 
 
 
