@@ -1,5 +1,5 @@
 # MacLearn
-![Python](https://img.shields.io/badge/Python-3.12+-blue.svg) [requirements.txt](https://github.com/ArtemChikc/MacLearn/blob/main/requirements.txt)
+![Python](https://img.shields.io/badge/Python-3.12+-blue.svg) [requirements.txt](https://github.com/b1t0nese/MacLearn/blob/main/requirements.txt)
 
 Программа, которая за считанные минуты соберёт для вас качественный датасет из тысяч изображений, скачанных из интернета.
 
@@ -7,13 +7,13 @@
 
 **MacLearn** — это программа для автоматического сбора и подготовки качественных датасетов из изображений, скачанных из интернета. Система создана для разработчиков ML-моделей, исследователей и всех, кто работает с компьютерным зрением.
 
-[**Скачать программу**](https://github.com/ArtemChikc/MacLearn/releases/tag/0.1.0(alpha)) | [**Скачать Chrome (нужен для работы программы)**](https://www.google.com/chrome/)
+[**Скачать программу**](https://github.com/b1t0nese/MacLearn/releases/tag/0.1.0(alpha)) | [**Скачать Chrome (нужен для работы программы)**](https://www.google.com/chrome/)
 
 **Использовать последнюю версию Chrome!** *(если программа не запустилась, возможно дело в старой версии браузера или в его отсутствии)*
 
-[**📋 Пояснительная записка**](https://github.com/ArtemChikc/MacLearn/blob/main/doc/пояснительная%20записка.md)
+[**📋 Пояснительная записка**](https://github.com/b1t0nese/MacLearn/blob/main/doc/пояснительная%20записка.md)
 
-[**🖥️ Презентация**](https://github.com/ArtemChikc/MacLearn/blob/main/doc/презентация.pptx)
+[**🖥️ Презентация**](https://github.com/b1t0nese/MacLearn/blob/main/doc/презентация.pptx)
 
 🧑‍💻 **Разработчик: b1t0ne (Минибаев Артём)**
 
