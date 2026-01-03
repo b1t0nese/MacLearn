@@ -195,45 +195,105 @@ class MainWindowUI(QMainWindow):
     def dataset_initUI(self):
         self.dataset_tab = uic.loadUi(os.path.join(uis_path, "tabs", "dataset_tab.ui"))
         self.tabWidget.addTab(self.dataset_tab, "Датасет")
-        self.dataset_tab.class_objects = []
+        self.dataset_tab.classes_tabs = {}
         self.dataset_resize_timer = QTimer()
         self.dataset_resize_timer.setSingleShot(True)
         self.dataset_resize_timer.timeout.connect(self.dataset_update_all_class_layouts)
+        self.dataset_tab.tab_bar.currentChanged.connect(self.dataset_on_tab_changed)
 
-    def dataset_add_class(self, class_name: str = None, enabled: bool = True) -> ClassFieldWidget:
-        class_widget = ClassFieldWidget()
-        class_widget.initUI(class_name=class_name, enabled=enabled)
-        self.dataset_tab.overview_vertical_layout.addWidget(class_widget)
-        self.dataset_tab.class_objects.append(class_widget)
-        class_widget.class_delete.clicked.disconnect()
-        class_widget.class_delete.clicked.connect(
-            lambda: self.dataset_delete_class(class_widget))
-        return class_widget
+    def dataset_on_tab_changed(self, index):
+        if index >= 0:
+            class_name = self.dataset_tab.tab_bar.tabText(index)
+            if class_name in self.dataset_tab.classes_tabs:
+                for widget in self.dataset_tab.classes_tabs.values():
+                    widget.hide()
+                selected_widget = self.dataset_tab.classes_tabs[class_name]
+                selected_widget.show()
+                layout = self.dataset_tab.content_widget.layout()
+                if selected_widget.parent() != self.dataset_tab.content_widget:
+                    layout.addWidget(selected_widget)
 
-    def dataset_delete_class(self, class_widget: ClassFieldWidget) -> bool:
+    def dataset_add_class(self, class_name: str = None) -> QWidget:
+        overview_widget = uic.loadUi(os.path.join(uis_path, "widgets", "overview_class.ui"))
+        overview_widget.overview_group.setTitle(class_name)
+        self.dataset_tab.classes_tabs[class_name] = overview_widget
+        self.dataset_tab.classes_tabs[class_name].fields_list = []
+        if self.dataset_tab.tab_bar.count() == 0:
+            self.dataset_tab.content_widget.layout().addWidget(overview_widget)
+            overview_widget.show()
+        else:
+            overview_widget.hide()
+        self.dataset_tab.tab_bar.addTab(class_name)
+        return overview_widget
+
+    def dataset_add_class_field_by_type(self, class_name: str, type_name: str, enabled: bool = True) -> ClassFieldWidget:
+        field_widget = ClassFieldWidget()
+        field_widget.initUI(type_name, enabled)
+        field_widget.class_delete.clicked.disconnect()
+        field_widget.class_delete.clicked.connect(
+            lambda: self.dataset_delete_class(field_widget))
+        self.dataset_tab.classes_tabs[class_name].overview_vertical_layout.addWidget(field_widget)
+        self.dataset_tab.classes_tabs[class_name].fields_list.append(field_widget)
+        return field_widget
+
+    def dataset_delete_class(self, overview_class_widget: QWidget) -> bool:
         reply = QMessageBox.question(
             self, "Удаление класса",
             "Вы точно хотите удалить класс? Все изображения которые относились к нему также будут удалены.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
         if reply == QMessageBox.StandardButton.Yes:
-            class_widget.delete_class()
-            self.dataset_tab.class_objects.remove(class_widget)
+            class_name_to_remove = self.get_class_field_name_in_dataset(overview_class_widget)
+            if class_name_to_remove:
+                for i in range(self.dataset_tab.tab_bar.count()):
+                    if self.dataset_tab.tab_bar.tabText(i) == class_name_to_remove:
+                        self.dataset_tab.tab_bar.removeTab(i)
+                        break
+                self.dataset_tab.content_widget.layout().removeWidget(overview_class_widget)
+                overview_class_widget.deleteLater()
+                del self.dataset_tab.classes_tabs[class_name_to_remove]
+                return True
+        return False
+
+    def dataset_delete_class_field_widget(self, field_widget: QWidget) -> bool:
+        reply = QMessageBox.question(
+            self, "Удаление данных класса", "Вы точно хотите удалить эти изображения?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
+        if reply == QMessageBox.StandardButton.Yes:
+            field_widget.delete_class()
+            class_widget = None
+            for widget in self.dataset_tab.classes_tabs.values():
+                if field_widget in widget.fields_list:
+                    class_widget = widget
+                    break
+            if class_widget:
+                class_widget.fields_list.remove(field_widget)
+                if class_widget.overview_vertical_layout:
+                    class_widget.overview_vertical_layout.removeWidget(field_widget)
+                field_widget.deleteLater()
             return True
         else:
             return False
 
-    def get_class_in_dataset(self, class_name: str) -> bool | ClassFieldWidget:
-        for i in range(self.dataset_tab.overview_vertical_layout.count()):
-            widget = self.dataset_tab.overview_vertical_layout.itemAt(i).widget()
-            if widget.class_name.text()==class_name:
-                return widget
+    def get_class_field_in_dataset(self, class_name: str, field_name: str) -> bool | QWidget:
+        class_tab = self.dataset_tab.classes_tabs.get(class_name)
+        if class_tab:
+            for field_widget in class_tab.fields_list:
+                if field_widget.class_name.text()==field_name:
+                    return field_widget
         return False
 
+    def get_overview_class_name_in_dataset(self, overview_class_widget: QWidget) -> bool | str:
+        class_name = False
+        for cur_class_name, widget in self.dataset_tab.classes_tabs.items():
+            if widget == overview_class_widget:
+                class_name = cur_class_name
+                break
+        return class_name
+
     def dataset_update_all_class_layouts(self):
-        for i in range(self.dataset_tab.overview_vertical_layout.count()):
-            item = self.dataset_tab.overview_vertical_layout.itemAt(i)
-            if item and hasattr(item.widget(), 'objects_widgets'):
-                item.widget().update_layout()
+        for class_name, class_overview in self.dataset_tab.classes_tabs.items():
+            for field_widget in class_overview.fields_list:
+                field_widget.update_layout()
 
 
     def autodataset_initUI(self):

@@ -202,15 +202,20 @@ class Dataset:
             result["annotation"] = json.loads(result["annotation"])
             return result
 
-    def get_images(self, class_id: int=None) -> list:
+    def get_images(self, class_id: int=None, type: str=None) -> list:
         with self.get_connection() as con:
             cur = con.cursor()
-            ex, ex_atrbs = "SELECT id FROM dataset", ()
-            if class_id:
-                ex += " WHERE class_id = ?"
-                ex_atrbs = (class_id,)
+            ex, ex_atrbs = "SELECT id FROM dataset", []
+            if class_id or type:
+                ex += " WHERE"
+                if class_id:
+                    ex += " class_id = ?"
+                    ex_atrbs.append(class_id)
+                if type:
+                    ex += f"{" AND" if class_id else ""} type = ?"
+                    ex_atrbs.append(type)
             result = []
-            for class_id in cur.execute(ex, ex_atrbs).fetchall():
+            for class_id in cur.execute(ex, tuple(ex_atrbs)).fetchall():
                 result.append(self.get_image(class_id[0]))
             return result
 
