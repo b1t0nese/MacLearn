@@ -42,6 +42,8 @@ class App:
             QMessageBox.warning(
                 self.windowUI, "Critical error",
                 str(e), QMessageBox.StandardButton.Ok)
+            self.close_application()
+            raise e
 
     def start(self, app):
         self.appApplication = app
@@ -92,23 +94,27 @@ class App:
     def update_dataset_view_in_window(self):
         classes = self.project_data.get_all_classes_conf()
         for clas in classes:
-            class_widget = self.windowUI.get_class_in_dataset(clas["class_name"])
-            if not class_widget:
-                class_widget = self.windowUI.dataset_add_class(clas["class_name"], clas["enabled"])
-                class_widget.class_delete.clicked.disconnect()
-                class_widget.class_delete.clicked.connect(lambda e, c_id=clas["id"], cw=class_widget: [
-                    self.project_data.del_image(img["id"]) for img in self.project_data.get_images(c_id)]\
-                        if self.windowUI.dataset_delete_class(cw) else None)
-            for image in self.project_data.get_images(clas["id"]):
-                object_widget = class_widget.get_object(image["filename"])
-                if not object_widget:
-                    object_widget = class_widget.add_object(
-                        image["filename"], self.project_data.get_full_path("images", image["filename"]))
-                    object_widget.object_delete.clicked.disconnect()
-                    object_widget.object_delete.clicked.connect(lambda e, img_id=image["id"], cw=class_widget, ow=object_widget: (
-                        print(img_id), self.project_data.del_image(img_id), cw.delete_object(ow), cw.update_layout()))
-            class_widget.update_layout()
-            class_widget.show_class(clas["enabled"])
+            class_overview = self.windowUI.dataset_tab.classes_tabs.get(clas["class_name"])
+            if not class_overview:
+                class_overview = self.windowUI.dataset_add_class(clas["class_name"])
+            for type in ["default", "augment", "validation"]:
+                type_field = self.windowUI.get_class_field_in_dataset(clas["class_name"], type)
+                if not type_field:
+                    type_field = self.windowUI.dataset_add_class_field_by_type(clas["class_name"], type)
+                    type_field.class_delete.clicked.disconnect()
+                    type_field.class_delete.clicked.connect(lambda e, c_id=clas["id"], cw=type_field, t=type: [
+                        self.project_data.del_image(img["id"]) for img in self.project_data.get_images(c_id, t)]\
+                            if self.windowUI.dataset_delete_class_field_widget(cw) else None)
+                for image in self.project_data.get_images(clas["id"], type):
+                    object_widget = type_field.get_object(image["filename"])
+                    if not object_widget:
+                        object_widget = type_field.add_object(
+                            image["filename"], self.project_data.get_full_path("images", image["filename"]))
+                        object_widget.object_delete.clicked.disconnect()
+                        object_widget.object_delete.clicked.connect(lambda e, img_id=image["id"], cw=type_field, ow=object_widget: (
+                            self.project_data.del_image(img_id), cw.delete_object(ow), cw.update_layout()))
+                type_field.update_layout()
+                type_field.show_class(clas["enabled"])
 
 
     def open_project(self, project_path: str = None) -> bool:

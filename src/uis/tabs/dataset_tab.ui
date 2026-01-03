@@ -15,6 +15,12 @@
     <layout class="QHBoxLayout" name="header_layout">
      <item>
       <widget class="QLabel" name="label_title">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="styleSheet">
         <string notr="true">font-size: 18px; font-weight: bold; padding: 10px;</string>
        </property>
@@ -24,23 +30,47 @@
       </widget>
      </item>
      <item>
-      <spacer name="horizontalSpacer">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
+      <widget class="QTabBar" name="tab_bar">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
        </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QPushButton" name="btn_update_dataset">
        <property name="minimumSize">
         <size>
          <width>0</width>
+         <height>35</height>
+        </size>
+       </property>
+       <property name="currentIndex">
+        <number>0</number>
+       </property>
+       <property name="tabsClosable">
+        <bool>false</bool>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QTabBar::tab { padding: 8px 16px; margin-right: 2px; }</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btn_update_dataset">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>35</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
          <height>35</height>
         </size>
        </property>
@@ -54,9 +84,21 @@
      </item>
      <item>
       <widget class="QPushButton" name="btn_export_dataset">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="minimumSize">
         <size>
-         <width>0</width>
+         <width>150</width>
+         <height>35</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>150</width>
          <height>35</height>
         </size>
        </property>
@@ -71,39 +113,8 @@
     </layout>
    </item>
    <item>
-    <widget class="QGroupBox" name="overview_group">
-     <property name="styleSheet">
-      <string notr="true">QGroupBox { font-size: 14px; font-weight: bold; }</string>
-     </property>
-     <property name="title">
-      <string>Обзор</string>
-     </property>
-     <layout class="QVBoxLayout" name="verticalLayout_3">
-      <item>
-       <widget class="QScrollArea" name="overview_scroll_area">
-        <property name="verticalScrollBarPolicy">
-         <enum>Qt::ScrollBarAsNeeded</enum>
-        </property>
-        <property name="horizontalScrollBarPolicy">
-         <enum>Qt::ScrollBarAsNeeded</enum>
-        </property>
-        <property name="widgetResizable">
-         <bool>true</bool>
-        </property>
-        <widget class="QWidget" name="overview_scroll_content">
-         <property name="geometry">
-          <rect>
-           <x>0</x>
-           <y>0</y>
-           <width>720</width>
-           <height>420</height>
-          </rect>
-         </property>
-         <layout class="QVBoxLayout" name="overview_vertical_layout"/>
-        </widget>
-       </widget>
-      </item>
-     </layout>
+    <widget class="QWidget" name="content_widget">
+     <layout class="QVBoxLayout" name="content_layout"/>
     </widget>
    </item>
   </layout>
