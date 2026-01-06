@@ -1,10 +1,12 @@
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
-from PyQt6.QtCore import QThread
+from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtCore import QThread, QUrl
 import qdarkstyle
 import sys
 
-from window import MainWindowUI
 from project_manager import Project
+from dataset_manager import AVAILABLE_FORMATS
+from window import MainWindowUI
 from autodataset import AutoDataset
 
 
@@ -45,7 +47,7 @@ class App:
             self.close_application()
             raise e
 
-    def start(self, app):
+    def start(self, app: QApplication):
         self.appApplication = app
         self.appApplication.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt6'))
         sys.exit(self.appApplication.exec())
@@ -65,8 +67,10 @@ class App:
 
     def init_config_window(self):
         self.windowUI.setWindowTitle(f'{self.windowUI.windowTitle()} ("{self.project_data.project_path}")')
+        self.windowUI.project_tab.combo_dataset_format.addItems(AVAILABLE_FORMATS.keys())
         self.windowUI.project_tab.btn_save_project.clicked.connect(self.save_project)
         self.windowUI.dataset_tab.btn_update_dataset.clicked.connect(self.update_dataset_view_in_window)
+        self.windowUI.dataset_tab.btn_export_dataset.clicked.connect(self.export_dataset_data)
         self.windowUI.autodataset_tab.work_tab.btn_start.clicked.connect(self.toggle_autodataset_work)
         self.windowUI.actionOpen.triggered.connect(self.open_project)
         self.windowUI.actionSave.triggered.connect(self.save_project)
@@ -117,7 +121,7 @@ class App:
                 type_field.show_class(clas["enabled"])
 
 
-    def open_project(self, project_path: str = None) -> bool:
+    def open_project(self, project_path: str=None) -> bool:
         if not project_path:
             project_path = QFileDialog.getExistingDirectory(
                 None, "Выберите папку проекта", "")
@@ -134,10 +138,12 @@ class App:
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                 if reply == QMessageBox.StandardButton.Close:
                     self.close_application()
+                    return False
                 elif reply == QMessageBox.StandardButton.No:
                     self.open_project()
-                    return
+                    return False
             self.new_window(project_path)
+            return True
         else:
             sys.exit()
 
@@ -183,6 +189,26 @@ class App:
                     self.open_project(new_project_path)
             else:
                 QMessageBox.warning(self.windowUI, "Ошибка", message)
+
+    def export_dataset_data(self):
+        dataset_path = QFileDialog.getExistingDirectory(None, "Выберите куда разместить датасет. (можно пропустить)", "")
+        choiced_format = self.windowUI.project_tab.combo_dataset_format.currentText()
+        DatasetManager = AVAILABLE_FORMATS[choiced_format]
+        dataset_manager = DatasetManager.from_project(self.project_data)
+        success, message = dataset_manager.export()
+        if success:
+            QMessageBox.information(self.windowUI, "Успех" if success else "Неудача", message)
+            if dataset_path:
+                success, message = dataset_manager.put_data(dataset_path)
+                if success:
+                    QMessageBox.information(self.windowUI, "Успех", message)
+                    dataset_manager.clear()
+            else:
+                dataset_path = dataset_manager.get_full_path("dataset")
+            url = QUrl.fromLocalFile(dataset_path)
+            QDesktopServices.openUrl(url)
+        if not success:
+            QMessageBox.warning(self.windowUI, "Ошибка", message)
 
 
     def toggle_autodataset_work(self):
