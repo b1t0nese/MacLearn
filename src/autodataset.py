@@ -150,24 +150,6 @@ def distort_image(img, distortion_type=None, fill_color=None):
     return distorted_img
 
 
-def resize(img, target_size=None):
-    if fill_color is None:
-        fill_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-    if target_size is None:
-        target_size = (300, 300)
-
-    height, width = img.shape[:2]
-    target_width, target_height = target_size
-
-    scale = min(target_width / width, target_height / height)
-    new_width = int(width * scale)
-    new_height = int(height * scale)
-
-    resized_img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
-    
-    return resized_img
-
-
 def get_annotation(img):
     pass
 

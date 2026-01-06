@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import *
-from PyQt6.QtCore import *
+from PyQt6.QtWidgets import QWidget
+from PyQt6.QtCore import QTimer
 import win32process
 import win32gui
 import win32con
@@ -69,9 +69,8 @@ class EmbeddedProgramWidget(QWidget):
         if self.program_hwnd:
             style = win32gui.GetWindowLong(self.program_hwnd, win32con.GWL_STYLE)
             style &= ~(win32con.WS_CAPTION | win32con.WS_THICKFRAME | 
-                    win32con.WS_MINIMIZEBOX | win32con.WS_MAXIMIZEBOX | 
-                    win32con.WS_SYSMENU | win32con.WS_BORDER | 
-                    win32con.WS_DLGFRAME)
+                       win32con.WS_MINIMIZEBOX | win32con.WS_MAXIMIZEBOX | 
+                       win32con.WS_SYSMENU | win32con.WS_BORDER | win32con.WS_DLGFRAME)
             win32gui.SetWindowLong(self.program_hwnd, win32con.GWL_STYLE, style)
 
     def update_window(self):
@@ -80,3 +79,14 @@ class EmbeddedProgramWidget(QWidget):
             self.move_window()
             win32gui.ShowWindow(self.program_hwnd, win32con.SW_SHOW)
             win32gui.UpdateWindow(self.program_hwnd)
+
+
+
+if __name__=="__main__":
+    from PyQt6.QtWidgets import QApplication
+    import sys
+    process_name = input('Введите название процесса приложения (пример "chrome.exe"): ')
+    app = QApplication(sys.argv)
+    window = EmbeddedProgramWidget(process_name)
+    window.show()
+    sys.exit(app.exec())
