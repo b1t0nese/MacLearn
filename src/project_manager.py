@@ -150,10 +150,12 @@ class Dataset:
                 result["subclasses"] = json.loads(result["subclasses"])
                 return result
 
-    def get_all_classes_conf(self) -> list:
+    def get_all_classes_conf(self, enabled: bool=None) -> list:
         with self.get_connection() as con:
             cur = con.cursor()
-            classes_ids = cur.execute("SELECT id FROM classes_conf").fetchall()
+            classes_ids = cur.execute(f"SELECT id FROM classes_conf{\
+                " WHERE enabled=?" if enabled is not None else ""}",
+                (enabled,) if enabled is not None else ()).fetchall()
             result = []
             for class_id in classes_ids:
                 class_data = self.get_class_conf(class_id[0])
@@ -257,23 +259,29 @@ class Project(Dataset):
 
     def add_skipped_paths(self):
         base = Path(self.project_path)
-        def scan_and_add_paths(current_path, structure_node):
-            if current_path.exists() and current_path.is_dir():
-                for item in current_path.iterdir():
-                    if item.name not in structure_node:
-                        if item.is_dir():
-                            structure_node[item.name] = {}
-                            scan_and_add_paths(item, structure_node[item.name])
-                        elif item.is_file():
-                            structure_node[item.name] = None
-        for key, value in self.project_paths.items():
-            if isinstance(value, dict):
-                folder_path = base / key
-                scan_and_add_paths(folder_path, self.project_paths[key])
-            elif value is None:
-                file_path = base / key
-                if file_path.exists() and file_path.name not in self.project_paths:
-                    self.project_paths[file_path.name] = None
+        
+        def scan_all_paths(current_path, structure_node):
+            """Рекурсивно сканирует всю папку и добавляет в структуру"""
+            if not current_path.exists() or not current_path.is_dir():
+                return
+                
+            for item in current_path.iterdir():
+                if item.name not in structure_node:
+                    if item.is_dir():
+                        # Добавляем папку
+                        structure_node[item.name] = {}
+                        # Рекурсивно сканируем её содержимое
+                        scan_all_paths(item, structure_node[item.name])
+                    else:
+                        # Добавляем файл
+                        structure_node[item.name] = None
+                else:
+                    # Если уже существует в структуре и это папка, сканируем дальше
+                    if isinstance(structure_node[item.name], dict) and item.is_dir():
+                        scan_all_paths(item, structure_node[item.name])
+        
+        # Сканируем корневую папку проекта
+        scan_all_paths(base, self.project_paths)
 
     def get_full_path(self, *path_parts: str) -> str:
         self.add_skipped_paths()
@@ -289,7 +297,9 @@ class Project(Dataset):
         return str(full_path).replace('\\', '/')
 
     def path_is_project(project_path: str) -> bool:
-        return os.path.exists(os.path.join(project_path, "project.sqlite"))
+        need_paths = ["example_images", "images", "project.sqlite"]
+        have_paths = map(lambda p: os.path.exists(os.path.join(project_path, p)), need_paths)
+        return all(have_paths)
 
 
     def save(self, configuration: dict, classes_conf: list=[]):
@@ -319,7 +329,7 @@ class Project(Dataset):
                     shutil.copytree(source_item, dest_item, dirs_exist_ok=True)
                 else:
                     shutil.copy2(source_item, dest_item)
-            return True, f"Датасет успешно сохранён по пути: {to_path}"
+            return True, f"Проект успешно сохранён по пути: {to_path}"
         except Exception as e:
             return False, f"Проект не был сохранён по новому пути. Ошибка: {e}"
 
@@ -342,7 +352,7 @@ class Project(Dataset):
         except shutil.SameFileError:
             return os.path.basename(subclass_data["example_image"])
 
-    def find_all_values_by_key(self, data, search_key: str) -> set:
+    def find_all_values_by_key(self, data: list, search_key: str) -> set:
         results = set()
         def _traverse(obj):
             if isinstance(obj, dict):

@@ -130,14 +130,6 @@
             <property name="styleSheet">
              <string notr="true">font-size: 13px;</string>
             </property>
-            <property name="currentText">
-             <string>YOLO</string>
-            </property>
-            <item>
-             <property name="text">
-              <string>YOLO</string>
-             </property>
-            </item>
            </widget>
           </item>
          </layout>
