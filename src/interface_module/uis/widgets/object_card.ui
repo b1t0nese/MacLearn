@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ObjectCardWidget</class>
+ <widget class="QWidget" name="ObjectCard">
+  <property name="minimumSize">
+   <size>
+    <width>270</width>
+    <height>250</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>300</width>
+    <height>275</height>
+   </size>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+QWidget {padding: 2px;}
+   </string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_5">
+   <item>
+     <widget class="QLabel" name="object_image">
+      <property name="styleSheet">
+       <string notr="true">
+QLabel {
+    color: palette(placeholder-text); 
+    font-style: italic; 
+    font-size: 12px;
+    border: 2px solid #ccc;
+    background-color: palette(alternate-base);
+}
+QLabel:hover {
+    border-color: palette(highlight);
+}
+       </string>
+      </property>
+      <property name="text">
+       <string>Нет изображения</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_10">
+     <item>
+      <widget class="QLineEdit" name="object_name">
+       <property name="styleSheet">
+        <string notr="true">
+QLineEdit {
+    font-weight: bold;
+    font-size: 13px;
+    margin-left: 5px;
+}
+        </string>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Новый объект</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="object_delete">
+       <property name="styleSheet">
+        <string notr="true">
+QPushButton {
+    background-color: palette(button);
+    color: palette(button-text);
+    border: 1px solid palette(midlight);
+    font-size: 10px;
+    border-radius: 4px;
+}
+QPushButton:hover {
+    background-color: palette(dark);
+    border-color: palette(highlight);
+}
+QPushButton:pressed {
+    background-color: palette(shadow);
+}
+        </string>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>❌</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

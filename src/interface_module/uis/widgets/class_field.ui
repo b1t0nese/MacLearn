@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ClassFieldWidget</class>
+ <widget class="QWidget" name="ClassField">
+  <property name="styleSheet">
+   <string notr="true">
+QWidget {
+    border: 2px solid #ccc;
+    border-radius: 5px;
+    padding: 10px;
+}
+   </string>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_4">
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <widget class="QCheckBox" name="class_checkbox">
+       <property name="styleSheet">
+        <string notr="true">
+QCheckBox {
+    border: 2px solid #ccc;
+    border-radius: 5px;
+    padding: 6px;
+}
+QCheckBox::indicator {
+    width: 20px;
+    height: 20px;
+}
+        </string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="class_name">
+       <property name="styleSheet">
+        <string notr="true">
+QLineEdit {
+    border: 2px solid #ccc;
+    border-radius: 5px;
+    padding: 6px;
+    font-size: 14px;
+    font-weight: bold;
+}
+        </string>
+       </property>
+       <property name="text">
+        <string>Новый класс</string>
+       </property>
+      </widget>
+     </item>
+     <!-- <item>
+      <spacer name="horizontalSpacer_3">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item> -->
+     <item>
+      <widget class="QPushButton" name="class_delete">
+       <property name="styleSheet">
+        <string notr="true">
+QPushButton {
+    background-color: palette(button);
+    color: palette(button-text);
+    border: 1px solid palette(midlight);
+    font-size: 10px;
+    border-radius: 4px;
+}
+QPushButton:hover {
+    background-color: palette(dark);
+    border-color: palette(highlight);
+}
+QPushButton:pressed {
+    background-color: palette(shadow);
+}
+        </string>
+       </property>
+       <property name="text">
+        <string>❌</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="class_grid_layout">
+     <property name="horizontalSpacing">
+      <number>10</number>
+     </property>
+     <property name="verticalSpacing">
+      <number>10</number>
+     </property>
+     <item row="0" column="0">
+      <widget class="QPushButton" name="class_add_object">
+       <property name="minimumSize">
+        <size>
+         <width>270</width>
+         <height>250</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>300</width>
+         <height>275</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">
+QPushButton {
+    background-color: palette(alternate-base);
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    font-size: 28px;
+    font-weight: bold;
+    color: palette(placeholder-text);
+}
+QPushButton:hover {
+    border-color: palette(highlight);
+    color: palette(highlight);
+}
+        </string>
+       </property>
+       <property name="text">
+        <string>+</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
