@@ -307,8 +307,14 @@ class MainWindowUI(QMainWindow):
         self.autodataset_tab.layout().addWidget(self.autodataset_tab.tab_widget)
         self.tabWidget.addTab(self.autodataset_tab, "Автодатасет")
         self.setup_autodataset_interface()
+        self.setup_autodataset()
+
+    def setup_autodataset(self):
         self.autodataset_classes_status = {}
         self.autodataset_main_status = {}
+        self.autodataset_tab.work_tab.text_logs.clear()
+        self.update_autodataset_statuses()
+        self.autodataset_update_progress(0)
 
     def set_btn_start_autodataset_state(self, started: bool=True):
         new_btn_start_style = self.autodataset_tab.work_tab.btn_start.styleSheet()
@@ -335,10 +341,6 @@ class MainWindowUI(QMainWindow):
         if self.autodataset_tab.tab_widget.currentWidget() == self.autodataset_tab.program_tab:
             self.autodataset_tab.program_tab.embed_program()
 
-    def update_autodataset_statuses(self):
-        self.update_autodataset_classes_status()
-        self.visualise_autodataset_classes_status()
-
     def setup_autodataset_interface(self):
         self.autodataset_tab.work_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.work_tab.verticalLayout_left, 25)
         self.autodataset_tab.work_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.work_tab.group_logs, 45)
@@ -351,6 +353,12 @@ class MainWindowUI(QMainWindow):
         header_stages.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header_stages.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
 
+    def update_autodataset_statuses(self):
+        self.update_autodataset_classes_status()
+        self.visualise_autodataset_classes_status()
+        self.visualise_autodataset_main_status()
+        self.autodataset_update_progress()
+
     def update_autodataset_classes_status(self):
         local_classes_status = {}    
         for class_obj in self.project_tab.class_objects:
@@ -362,24 +370,40 @@ class MainWindowUI(QMainWindow):
                     object_data = {
                         "example_image": object.object_image.my_image_path,
                         "class": class_obj.class_name.text(),
-                        "status": f"{self.autodataset_classes_status[object_text]["status"].split("/")[0]\
-                                     if object_text in self.autodataset_classes_status else 0}/{images_per_subclass}"
+                        "status": (self.autodataset_classes_status[object_text]["status"][0]\
+                                   if object_text in self.autodataset_classes_status else 0, images_per_subclass)
                     }
                     local_classes_status[object_text] = object_data
         self.autodataset_classes_status = local_classes_status.copy()
 
     def update_autodataset_object_status(self, object_name: str, status: int):
-        self.autodataset_classes_status[object_name]["status"] = f"{status}/{self.autodataset_classes_status[object_name]["status"].split("/")[1]}"
+        self.autodataset_classes_status[object_name]["status"] = (status, self.autodataset_classes_status[object_name]["status"][1])
         self.visualise_autodataset_classes_status()
 
     def visualise_autodataset_classes_status(self):
         self.autodataset_tab.work_tab.table_classes.setRowCount(len(self.autodataset_classes_status))
         self.autodataset_tab.work_tab.table_classes.setHorizontalHeaderLabels(["Класс", "Подкласс", "Статус"])
-        for r, object_data in enumerate(self.autodataset_classes_status.items()):
-            object_text, object = object_data
+        for r, (object_text, object) in enumerate(self.autodataset_classes_status.items()):
             self.autodataset_tab.work_tab.table_classes.setItem(r, 0, QTableWidgetItem(object["class"]))
             self.autodataset_tab.work_tab.table_classes.setItem(r, 1, QTableWidgetItem(object_text))
-            self.autodataset_tab.work_tab.table_classes.setItem(r, 2, QTableWidgetItem(object["status"]))
+            self.autodataset_tab.work_tab.table_classes.setItem(r, 2, QTableWidgetItem(f"{object["status"][0]}/{object["status"][1]}"))
+
+    def update_autodataset_main_status(self, name: str, progress: tuple | int=(0, 0)):
+        self.autodataset_main_status[name] = progress if isinstance(progress, tuple) else (progress, self.autodataset_main_status.get(name)[1])
+        self.update_autodataset_statuses()
+
+    def visualise_autodataset_main_status(self):
+        self.autodataset_tab.work_tab.table_stages.setRowCount(len(self.autodataset_main_status))
+        self.autodataset_tab.work_tab.table_stages.setHorizontalHeaderLabels(["Этап", "Статус"])
+        for r, (stage, status) in enumerate(self.autodataset_main_status.items()):
+            self.autodataset_tab.work_tab.table_stages.setItem(r, 0, QTableWidgetItem(stage))
+            self.autodataset_tab.work_tab.table_stages.setItem(r, 1, QTableWidgetItem(f"{status[0]}/{status[1]}"))
+
+    def autodataset_update_progress(self, progress: int=0):
+        progress_status = sum(map(lambda x: x[1][0], self.autodataset_main_status.items()))
+        full_progress_status = sum(map(lambda x: x[1][1], self.autodataset_main_status.items()))
+        progress_proc = round(progress_status / full_progress_status * 100) if progress_status and full_progress_status else 0
+        self.autodataset_tab.work_tab.progress_bar.setValue(progress_proc if not progress else progress)
 
     def autodataset_log(self, text: str, otstup: int=0):
         self.autodataset_tab.work_tab.text_logs.append('\n'*otstup+f'[{datetime.now().strftime("%H:%M:%S")}] {text}')
@@ -391,13 +415,10 @@ class MainWindowUI(QMainWindow):
                 self.autodataset_tab.work_tab.label_image.width(),
                 self.autodataset_tab.work_tab.label_image.height(),
                 Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            ))
+                Qt.TransformationMode.SmoothTransformation
+        ))
         self.autodataset_tab.work_tab.label_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.autodataset_tab.work_tab.label_image_path.setText(image_path)
-
-    ... # другие функции специально для "Автодатасет" табы
-
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

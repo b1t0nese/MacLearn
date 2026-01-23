@@ -161,8 +161,17 @@ class AutoDataset(QObject):
     progress = pyqtSignal(int)
     log_field = pyqtSignal(str, int)
     cur_image_label = pyqtSignal(str)
-    stage_updated = pyqtSignal(str, str)
+    stage_updated = pyqtSignal(str, tuple)
     subclass_updated = pyqtSignal(str, int)
+
+
+    def update_information(self, log_emit: tuple, subclass_updated: tuple=None,
+                           stage_updated: tuple=None, cur_image: str=None):
+        self.log_field.emit(*log_emit)
+        if subclass_updated: self.subclass_updated.emit(*subclass_updated)
+        if stage_updated: self.stage_updated.emit(*stage_updated)
+        if cur_image: self.cur_image_label.emit(cur_image)
+
 
     def __init__(self, project_manager: Project, headless_chrome=False):
         super().__init__()
@@ -263,11 +272,12 @@ class AutoDataset(QObject):
                     if response.status_code==200:
                         image_id = self.project_manager.save_image(
                             response.content, class_id, "validation" if validation_data and i+1>=num_images else "default")
-                        downloaded_images_count += 1
-                        self.subclass_updated.emit(subclass_data["search_query"], downloaded_images_count)
-                        self.log_field.emit(f"Скачан файл {downloaded_images_count}/{images_count}, id: {image_id}", 0)
-                        self.cur_image_label.emit(self.project_manager.get_full_path(
-                            "images", self.project_manager.get_image(image_id)["filename"]))
+                        self.downloaded_images_count += 1; downloaded_images_count += 1
+                        self.update_information(
+                            (f"Скачан файл {downloaded_images_count}/{images_count}, id: {image_id}", 0),
+                            (subclass_data["search_query"], downloaded_images_count),
+                            ("Download images", (self.downloaded_images_count, self.all_images_count)),
+                            self.project_manager.get_full_path("images", self.project_manager.get_image(image_id)["filename"]))
                 else: break
             except Exception as e:
                 self.log_field.emit(f"Ошибка при скачивании файла: {e}. Id: {image_id if image_id else i}", 0)
@@ -289,22 +299,24 @@ class AutoDataset(QObject):
             "classes": self.project_manager.get_all_classes_conf()
         }
 
+        self.downloaded_images_count = 0
+        self.all_images_count = sum([int(self.project_data["configuration"]["images_per_class"] * 1.2) for _ in self.project_data["classes"]])
+        self.stage_updated.emit("Download images", (self.downloaded_images_count, self.all_images_count))
         self.log_field.emit('Установка изображений...\n', 1)
         for class_data in self.project_data["classes"]:
             for subclass_data in class_data["subclasses"]:
                 if class_data["enabled"] and self._is_running:
                     img_counts = self.project_data["configuration"]["images_per_class"]//len(class_data["subclasses"])
                     val_img_counts = (img_counts // 5) if self.project_data["configuration"]["validation_data"] else 0
-                    def_count, val_count = [len(self.project_manager.get_images(class_data["id"], dat_type))\
-                                            for dat_type in ["default", "validation"]]
-                    img_counts -= def_count; val_img_counts -= val_count
-                    img_counts, val_img_counts = (img_counts if img_counts else 0), (val_img_counts if val_img_counts else 0)
-                    self.subclass_updated.emit(subclass_data["search_query"], def_count+val_count)
-                    if def_count<img_counts or val_count<val_img_counts:
-                        self.download_images(subclass_data, img_counts, class_data["class_id"],
-                                             val_img_counts if val_img_counts else 0)
-                    else:
-                        self.log_field.emit('INFO: Все изображения данного подкласса уже установлены.', 0)
+                    def_count, def_val_count = [len(self.project_manager.get_images(class_data["id"], dat_type))\
+                                                for dat_type in ["default", "validation"]]
+                    img_counts -= def_count; val_img_counts -= def_val_count
+                    img_counts, val_img_counts = (img_counts if img_counts>0 else 0), (val_img_counts if val_img_counts>0 else 0)
+                    all_imgs = def_count+def_val_count; self.downloaded_images_count += all_imgs; self.update_information(
+                        (f'INFO: В классе {subclass_data["query_text"]} уже присутствует изображений: {all_imgs}.', 0),
+                        (subclass_data["search_query"], all_imgs), ("Download images", (self.downloaded_images_count, self.all_images_count)))
+                    if img_counts or val_img_counts:
+                        self.download_images(subclass_data, img_counts, class_data["class_id"], val_img_counts)
         self.log_field.emit('Готово! Изображения скачаны.\n', 1)
 
         if not self._is_running:
