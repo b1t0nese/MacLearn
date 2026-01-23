@@ -54,6 +54,7 @@ class App:
 
     def close_application(self, event=None):
         if hasattr(self, "appApplication") and hasattr(self, "windowUI") and self.appApplication and self.windowUI:
+            self.delete_autodataset_thread()
             if self.autodataset_worker:
                 self.autodataset_worker.close()
             self.windowUI.close()
@@ -231,8 +232,9 @@ class App:
     def start_autodataset(self):
         if hasattr(self, 'autodataset_thread') and self.autodataset_thread and self.autodataset_thread.isRunning():
             return
-        if self.autodataset_worker and self.autodataset_worker.thread() != QThread.currentThread():
-            self.autodataset_worker.moveToThread(QThread.currentThread())
+        self.windowUI.setup_autodataset()
+
+        self.delete_autodataset_thread()
         self.autodataset_thread = QThread()
         self.autodataset_worker.moveToThread(self.autodataset_thread)
 
@@ -244,12 +246,13 @@ class App:
             lambda boolean: self.windowUI.autodataset_tab.program_tab.set_lock_resize(boolean))
         self.autodataset_worker.log_field.connect(self.windowUI.autodataset_log)
         self.autodataset_worker.cur_image_label.connect(self.windowUI.autodataset_set_image)
+        self.autodataset_worker.stage_updated.connect(self.windowUI.update_autodataset_main_status)
         self.autodataset_worker.subclass_updated.connect(self.windowUI.update_autodataset_object_status)
 
         self.autodataset_thread.start()
         self.windowUI.set_btn_start_autodataset_state(True)
 
-    def on_autodataset_finished(self):
+    def delete_autodataset_thread(self):
         if self.autodataset_thread:
             try:
                 self.autodataset_thread.started.disconnect()
@@ -258,14 +261,17 @@ class App:
                 self.autodataset_worker.chrome_widget_lock.disconnect()
                 self.autodataset_worker.log_field.disconnect()
                 self.autodataset_worker.cur_image_label.disconnect()
+                self.autodataset_worker.stage_updated.disconnect()
                 self.autodataset_worker.subclass_updated.disconnect()
             except: pass
-        if self.autodataset_worker:
+        if self.autodataset_worker.thread() != QThread.currentThread():
             self.autodataset_worker.moveToThread(QThread.currentThread())
         if hasattr(self, 'autodataset_thread') and self.autodataset_thread:
             self.autodataset_thread.deleteLater()
             self.autodataset_thread = None
 
+    def on_autodataset_finished(self):
+        self.delete_autodataset_thread()
         self.windowUI.set_btn_start_autodataset_state(False)
 
     def stop_autodataset(self):

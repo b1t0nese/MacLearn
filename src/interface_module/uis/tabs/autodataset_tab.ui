@@ -366,7 +366,6 @@ QProgressBar {
 }
 QProgressBar::chunk {
     background-color: #4CAF50;
-    width: 20px;
 }
       </string>
      </property>
