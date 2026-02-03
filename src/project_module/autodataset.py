@@ -12,6 +12,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from undetected_chromedriver import Chrome
 import requests
 import cv2
@@ -150,10 +152,6 @@ def distort_image(img, distortion_type=None, fill_color=None):
     return distorted_img
 
 
-def get_annotation(img):
-    pass
-
-
 
 class AutoDataset(QObject):
     finished = pyqtSignal()
@@ -176,7 +174,8 @@ class AutoDataset(QObject):
     def __init__(self, project_manager: Project, headless_chrome=False):
         super().__init__()
         self._is_running = False
-        self.driver = Chrome(headless=headless_chrome)
+        service = Service(ChromeDriverManager().install())
+        self.driver = Chrome(service=service, headless=headless_chrome)
         self.clipboard_manager = ClipboardManager()
         self.project_manager = project_manager
 
