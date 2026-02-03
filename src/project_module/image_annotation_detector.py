@@ -1,6 +1,7 @@
 import cv2
 from cv2.typing import MatLike
 import numpy as np
+import rembg
 
 
 
@@ -24,10 +25,13 @@ class ImageAnnotation:
 
         if img_size and new_img_size:
             (w1, h1), (w2, h2) = img_size, new_img_size
-            prop = max(w1, w2) / min(w1, w2)
-            bbox = tuple([int(i/prop if w1>=w2 else i*prop) for i in bbox])
-
-        x, y, w, h = bbox
+            scale_x, scale_y = w2 / w1, h2 / h1
+            x, y, w, h = bbox
+            x, w = int(x * scale_x), int(w * scale_x)
+            y, h = int(y * scale_y), int(h * scale_y)
+            bbox = (x, y, w, h)
+        else:
+            x, y, w, h = bbox
 
         if type=="YOLO" and end_img_size:
             yolo_x_center, yolo_y_center = (x + w/2) / img_size[0], (y + h/2) / img_size[1]
@@ -115,6 +119,10 @@ class ImageAnnotationDetector:
         self.min_object_area = min_object_area
 
 
+    def remove_bg(self):
+        self.image = rembg.remove(self.image)
+
+
     def detect_contours(self):
         self.blurred = cv2.GaussianBlur(self.image, (11, 11), 0)
         self.gray = cv2.cvtColor(self.blurred, cv2.COLOR_BGR2GRAY)
@@ -166,24 +174,25 @@ class ImageAnnotationDetector:
 
 
 def main():
-    my_photo = cv2.imread(input("Введите путь к изображению: "))
+    from PIL import Image
+    my_photo = Image.open(input("Введите путь к изображению: "))
     if not my_photo:
         return
     image = cv2.cvtColor(np.array(my_photo), cv2.COLOR_RGB2BGR)
 
     object_detector = ImageAnnotationDetector(image)
+    object_detector.remove_bg()
     object_detector.detect_contours()
     object_detector.smooth_contours()
     object_detector.filter_contours_to_needed()
 
     annotation_data = object_detector.calculate_bboxes_data()
-    for annotation in annotation_data:
-        print(annotation)
-        print(ImageAnnotation.formate_bbox(annotation["bbox"], image.shape[:2][::-1], (640, 320)))
+    if annotation_data:
+        print(annotation_data[0])
 
-    cv2.imshow('Detected', object_detector.put_contours_on_image(image, (100, 200, 0), (200, 100, 0)))
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        cv2.imshow('Detected', object_detector.put_contours_on_image(image))
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
 
