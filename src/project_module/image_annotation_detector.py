@@ -1,0 +1,152 @@
+import cv2
+from cv2.typing import MatLike
+import numpy as np
+
+
+
+class ImageAnnotation:
+    def __init__(self, contour: MatLike, img_size: tuple[int]):
+        self.contour: MatLike = contour
+        self.img_size = img_size
+        self.hull: MatLike = None
+        self.bbox: tuple[int] = ()
+        self.bbox_center: tuple[int] = ()
+        self.bbox_yolo = ""
+        self.bbox_coco = ""
+        self.bbox_pascal_voc = ""
+
+
+    def calculate_rect(self):
+        epsilon = 0.005 * cv2.arcLength(self.contour, True)
+        approx = cv2.approxPolyDP(self.contour, epsilon, True)
+        self.hull = cv2.convexHull(approx)
+
+
+    def calc(self):
+        if self.hull is None:
+            self.calculate_rect()
+        x, y, w, h = cv2.boundingRect(self.hull)
+        img_height, img_width = self.img_size
+        yolo_x_center, yolo_y_center = (x + w/2) / img_width, (y + h/2) / img_height
+        yolo_width, yolo_height = w / img_width, h / img_height
+
+        self.bbox = (x, y, w, h)
+        self.bbox_center = (x + w//2, y + h//2)
+        self.bbox_area = int(cv2.contourArea(self.contour))
+        self.bbox_yolo = f"{yolo_x_center:.6f} {yolo_y_center:.6f} {yolo_width:.6f} {yolo_height:.6f}"
+        self.bbox_coco = f"[{x}, {y}, {w}, {h}]"
+        self.bbox_pascal_voc = f"<xmin>{x}</xmin><ymin>{y}</ymin><xmax>{x+w}</xmax><ymax>{y+h}</ymax>"
+
+
+    def get(self):
+        self.calculate_rect()
+        self.calc()
+        return {
+            "bbox": self.bbox,
+            "center": self.bbox_center,
+            "area": self.bbox_area,
+            "yolo": self.bbox_yolo,
+            "coco": self.bbox_coco,
+            "pascal_voc": self.bbox_pascal_voc
+        }
+
+
+    def put_contour_on_image(self, array_image: MatLike, contour: tuple[int]=(),
+                             hull_contour: tuple[int]=(), rectangle: tuple[int]=(0, 0, 255)) -> MatLike:
+        x, y, w, h = cv2.boundingRect(self.hull)
+
+        array_image_new = array_image.copy()
+        if contour:
+            cv2.drawContours(array_image_new, [self.contour], -1, contour, 2)
+        if hull_contour:
+            cv2.drawContours(array_image_new, [self.hull], -1, hull_contour, 2)
+        if rectangle:
+            cv2.rectangle(array_image_new, (x, y), (x + w, y + h), rectangle, 2)
+        
+        return array_image_new
+
+
+
+class ImageAnnotationDetector:
+    def __init__(self, image: MatLike, max_objects: int=5, min_object_area: int=50000):
+        self.image = image
+        self.blurred = cv2.GaussianBlur(image, (11, 11), 0)
+        self.gray = cv2.cvtColor(self.blurred, cv2.COLOR_BGR2GRAY)
+        self.edges = cv2.Canny(self.gray, 20, 80)
+
+        self.contours = None
+        self.needed_contours = None
+        self.annotations: list[ImageAnnotation] = []
+
+        self.max_objects = max_objects
+        self.min_object_area = min_object_area
+
+
+    def detect_contours(self):
+        kernel = np.ones((7, 7), np.uint8)
+        closed = cv2.morphologyEx(self.edges, cv2.MORPH_CLOSE, kernel, iterations=2)
+        dilated = cv2.dilate(closed, kernel, iterations=3)
+        filled = cv2.morphologyEx(
+            dilated, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15)), iterations=2)
+        self.contours, _ = cv2.findContours(filled, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        self.needed_contours = self.contours
+
+
+    def smooth_contours(self):
+        mask = np.zeros_like(self.gray)
+        for contour in self.contours:
+            cv2.drawContours(mask, [contour], -1, 255, -1)
+        mask = cv2.GaussianBlur(mask, (21, 21), 0)
+        _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+        self.contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        self.needed_contours = self.contours
+
+
+    def filter_contours_to_needed(self, max_contours: int=None, min_area: int=None):
+        max_contours = max_contours if max_contours else self.max_objects
+        min_area = min_area if min_area else self.min_object_area
+        contours = sorted(self.contours, key=cv2.contourArea, reverse=True)[:max_contours]
+        self.needed_contours = [c for c in contours if cv2.contourArea(c) > min_area]
+
+
+    def calculate_bboxes_data(self) -> list[dict]:
+        if self.needed_contours:
+            self.annotations, annotations_data = [], []
+            for contour in self.needed_contours:
+                annotation = ImageAnnotation(contour, self.image.shape[:2])
+                data = annotation.get()
+                annotations_data.append(data)
+                self.annotations.append(annotation)
+            return annotations_data
+
+
+    def put_contours_on_image(self, array_image: MatLike, contours: tuple[int]=(),
+                              hull_contours: tuple[int]=(), rectangles: tuple[int]=(0, 0, 255)) -> MatLike:
+        array_image_new = array_image.copy()
+        for annotation in self.annotations:
+            array_image_new = annotation.put_contour_on_image(array_image_new, contours, hull_contours, rectangles)
+        return array_image_new
+
+
+
+def main():
+    my_photo = cv2.imread(input("Введите путь к изображению: "))
+    image = cv2.cvtColor(np.array(my_photo), cv2.COLOR_RGB2BGR)
+
+    object_detector = ImageAnnotationDetector(image)
+    object_detector.detect_contours()
+    object_detector.smooth_contours()
+    object_detector.filter_contours_to_needed()
+
+    annotation_data = object_detector.calculate_bboxes_data()
+    for annotation in annotation_data:
+        print(annotation)
+
+    cv2.imshow('Detected', object_detector.put_contours_on_image(image, hull_contours=(200, 100, 0)))
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+
+if __name__=="__main__":
+    main()
