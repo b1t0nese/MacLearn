@@ -5,6 +5,45 @@ import numpy as np
 
 
 class ImageAnnotation:
+    def formate_bbox(bbox: tuple[int], img_size: tuple[int]=None,
+                     new_img_size: tuple[int]=None, type: str=None) -> str:
+        """
+        Formate bbox for new image or other annotation type
+
+        :param bbox: bounding box data of the type (x, y, w, h)
+        :type bbox: tuple[int]
+        :param img_size: Optionally: (w, h) of the image in which the bbox was received, it is necessary for type="YOLO" or when resizing the image
+        :type img_size: tuple[int] = None
+        :param new_img_size: Optionally: (w, h) of the image to create a new annotation for
+        :type new_img_size: tuple[int] = None
+        :param type: the name of the annotation type used, available: "YOLO", "COCO", "PASCAL_VOC", None (default bbox)
+        :type type: str = "COCO"
+        :return: formatted annotation as string
+        """
+        end_img_size = new_img_size if new_img_size else img_size
+
+        if img_size and new_img_size:
+            (w1, h1), (w2, h2) = img_size, new_img_size
+            prop = max(w1, w2) / min(w1, w2)
+            bbox = tuple([int(i/prop if w1>=w2 else i*prop) for i in bbox])
+
+        x, y, w, h = bbox
+
+        if type=="YOLO" and end_img_size:
+            yolo_x_center, yolo_y_center = (x + w/2) / img_size[0], (y + h/2) / img_size[1]
+            yolo_width, yolo_height = w / img_size[0], h / img_size[1]
+            return f"{yolo_x_center:.6f} {yolo_y_center:.6f} {yolo_width:.6f} {yolo_height:.6f}"
+
+        elif type=="COCO":
+            return f"[{x}, {y}, {w}, {h}]"
+
+        elif type=="PASCAL_VOC":
+            return f"<xmin>{x}</xmin><ymin>{y}</ymin><xmax>{x+w}</xmax><ymax>{y+h}</ymax>"
+    
+        else:
+            return bbox
+
+
     def __init__(self, contour: MatLike, img_size: tuple[int]):
         self.contour: MatLike = contour
         self.img_size = img_size
@@ -25,17 +64,14 @@ class ImageAnnotation:
     def calc(self):
         if self.hull is None:
             self.calculate_rect()
-        x, y, w, h = cv2.boundingRect(self.hull)
-        img_height, img_width = self.img_size
-        yolo_x_center, yolo_y_center = (x + w/2) / img_width, (y + h/2) / img_height
-        yolo_width, yolo_height = w / img_width, h / img_height
+        bbox = cv2.boundingRect(self.hull)
 
-        self.bbox = (x, y, w, h)
-        self.bbox_center = (x + w//2, y + h//2)
+        self.bbox = bbox
+        self.bbox_center = (bbox[0] + bbox[2]//2, bbox[1] + bbox[3]//2)
         self.bbox_area = int(cv2.contourArea(self.contour))
-        self.bbox_yolo = f"{yolo_x_center:.6f} {yolo_y_center:.6f} {yolo_width:.6f} {yolo_height:.6f}"
-        self.bbox_coco = f"[{x}, {y}, {w}, {h}]"
-        self.bbox_pascal_voc = f"<xmin>{x}</xmin><ymin>{y}</ymin><xmax>{x+w}</xmax><ymax>{y+h}</ymax>"
+        self.bbox_yolo = ImageAnnotation.formate_bbox(bbox, self.img_size, type="YOLO")
+        self.bbox_coco = ImageAnnotation.formate_bbox(bbox, type="COCO")
+        self.bbox_pascal_voc = ImageAnnotation.formate_bbox(bbox, type="PASCAL_VOC")
 
 
     def get(self):
@@ -68,11 +104,8 @@ class ImageAnnotation:
 
 
 class ImageAnnotationDetector:
-    def __init__(self, image: MatLike, max_objects: int=5, min_object_area: int=50000):
+    def __init__(self, image: MatLike, max_objects: int=1, min_object_area: int=5000):
         self.image = image
-        self.blurred = cv2.GaussianBlur(image, (11, 11), 0)
-        self.gray = cv2.cvtColor(self.blurred, cv2.COLOR_BGR2GRAY)
-        self.edges = cv2.Canny(self.gray, 20, 80)
 
         self.contours = None
         self.needed_contours = None
@@ -83,6 +116,9 @@ class ImageAnnotationDetector:
 
 
     def detect_contours(self):
+        self.blurred = cv2.GaussianBlur(self.image, (11, 11), 0)
+        self.gray = cv2.cvtColor(self.blurred, cv2.COLOR_BGR2GRAY)
+        self.edges = cv2.Canny(self.gray, 20, 80)
         kernel = np.ones((7, 7), np.uint8)
         closed = cv2.morphologyEx(self.edges, cv2.MORPH_CLOSE, kernel, iterations=2)
         dilated = cv2.dilate(closed, kernel, iterations=3)
@@ -113,7 +149,7 @@ class ImageAnnotationDetector:
         if self.needed_contours:
             self.annotations, annotations_data = [], []
             for contour in self.needed_contours:
-                annotation = ImageAnnotation(contour, self.image.shape[:2])
+                annotation = ImageAnnotation(contour, self.image.shape[:2][::-1])
                 data = annotation.get()
                 annotations_data.append(data)
                 self.annotations.append(annotation)
@@ -131,6 +167,8 @@ class ImageAnnotationDetector:
 
 def main():
     my_photo = cv2.imread(input("Введите путь к изображению: "))
+    if not my_photo:
+        return
     image = cv2.cvtColor(np.array(my_photo), cv2.COLOR_RGB2BGR)
 
     object_detector = ImageAnnotationDetector(image)
@@ -141,8 +179,9 @@ def main():
     annotation_data = object_detector.calculate_bboxes_data()
     for annotation in annotation_data:
         print(annotation)
+        print(ImageAnnotation.formate_bbox(annotation["bbox"], image.shape[:2][::-1], (640, 320)))
 
-    cv2.imshow('Detected', object_detector.put_contours_on_image(image, hull_contours=(200, 100, 0)))
+    cv2.imshow('Detected', object_detector.put_contours_on_image(image, (100, 200, 0), (200, 100, 0)))
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
