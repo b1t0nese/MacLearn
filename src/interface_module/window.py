@@ -212,6 +212,8 @@ class MainWindowUI(QMainWindow):
                 layout = self.dataset_tab.content_widget.layout()
                 if selected_widget.parent() != self.dataset_tab.content_widget:
                     layout.addWidget(selected_widget)
+                for field_widget in selected_widget.fields_list:
+                    field_widget.update_layout()
 
     def dataset_add_class(self, class_name: str = None) -> QWidget:
         overview_widget = uic.loadUi(os.path.join(uis_path, "widgets", "overview_class.ui"))
