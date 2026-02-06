@@ -1,10 +1,3 @@
-import io
-import random
-import time
-import subprocess
-import threading
-import platform
-import os
 from urllib.parse import quote as url_quote
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from selenium.webdriver.common.action_chains import ActionChains
@@ -15,13 +8,17 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from undetected_chromedriver import Chrome
-import requests
-import cv2
-import numpy as np
 from PIL import Image
-# from rembg import remove as removefon
+import subprocess
+import threading
+import requests
+import platform
+import time
+import os
+import io
 
 from .project_manager import Project
+from .photoshop import *
 
 
 
@@ -113,71 +110,37 @@ class ClipboardManager:
 
 
 
-def distort_image(img, distortion_type=None, fill_color=None):
-    if distortion_type is None:
-        distortion_type = random.choice(["blur", "noise", "rotation", "perspective"])
-    if fill_color is None:
-        fill_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-
-    if distortion_type == "blur":
-        blur_amount = random.randint(3, 15)
-        if blur_amount % 2 == 0:
-            blur_amount += 1
-        distorted_img = cv2.GaussianBlur(img, (blur_amount, blur_amount), 0)
-    elif distortion_type == "noise":
-        row, col, ch = img.shape
-        noise_level = random.randint(0, 10)
-        gauss = np.random.normal(0, noise_level, (row, col, ch)).astype('uint8')
-        distorted_img = cv2.add(img, gauss)
-    elif distortion_type == "rotation":
-        angle = random.randint(-30, 30)
-        height, width = img.shape[:2]
-        center = (width // 2, height // 2)
-        rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-        distorted_img = cv2.warpAffine(img, rotation_matrix, (width, height), borderValue=fill_color)
-    elif distortion_type == "perspective":
-        height, width = img.shape[:2]
-        max_offset = min(width, height) // 4
-        pts1 = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
-        offset1 = (random.randint(0, max_offset), random.randint(0, max_offset))
-        offset2 = (width - random.randint(0, max_offset), random.randint(0, max_offset))
-        offset3 = (random.randint(0, max_offset), height - random.randint(0, max_offset))
-        offset4 = (width - random.randint(0, max_offset), height - random.randint(0, max_offset))
-        pts2 = np.float32([offset1, offset2, offset3, offset4])
-        matrix = cv2.getPerspectiveTransform(pts1, pts2)
-        distorted_img = cv2.warpPerspective(img, matrix, (width, height), borderMode=cv2.BORDER_CONSTANT, borderValue=fill_color)
-    else:
-        distorted_img = None
-
-    return distorted_img
-
-
-
 class AutoDataset(QObject):
     finished = pyqtSignal()
     chrome_widget_lock = pyqtSignal(bool)
     progress = pyqtSignal(int)
     log_field = pyqtSignal(str, int)
-    cur_image_label = pyqtSignal(str)
+    cur_image_label = pyqtSignal(str, np.ndarray)
     stage_updated = pyqtSignal(str, tuple)
     subclass_updated = pyqtSignal(str, int)
 
 
     def update_information(self, log_emit: tuple, subclass_updated: tuple=None,
-                           stage_updated: tuple=None, cur_image: str=None):
+                           stage_updated: tuple=None, cur_image: tuple=None):
         self.log_field.emit(*log_emit)
         if subclass_updated: self.subclass_updated.emit(*subclass_updated)
         if stage_updated: self.stage_updated.emit(*stage_updated)
-        if cur_image: self.cur_image_label.emit(cur_image)
+        if cur_image: self.cur_image_label.emit(*cur_image)
 
 
-    def __init__(self, project_manager: Project, headless_chrome=False):
+    def __init__(self, project_manager: Project, chrome_version: int=None, headless_chrome: bool=False):
         super().__init__()
         self._is_running = False
+
         service = Service(ChromeDriverManager().install())
-        self.driver = Chrome(service=service, headless=headless_chrome)
+        self.driver = Chrome(service=service, version_main=chrome_version, headless=headless_chrome)
         self.clipboard_manager = ClipboardManager()
+
         self.project_manager = project_manager
+        self.update_project_data()
+
+        self.downloaded_images_count = 0
+        self.created_annotations_count = 0
 
 
     def close(self):
@@ -194,44 +157,47 @@ class AutoDataset(QObject):
             self.driver.switch_to.window(self.driver.window_handles[0])
 
 
-    def download_images(self, subclass_data: dict, num_images: int, class_id: int,
+    def download_images(self, subclass_data: dict, class_id: int, num_images: int,
                         validation_data: int=0, downloaded: int=0):
         if validation_data:
             images_count = num_images+validation_data
             self.log_field.emit('INFO: Установка валидационных данных включена.', 0)
         else: images_count = num_images
+        example_image = subclass_data["example_image"]
 
         self.log_field.emit('Поиск изображений...', 0)
         self.driver.get("https://yandex.ru/images")
         self.chrome_widget_lock.emit(True)
 
-        if subclass_data["example_image"]:
+        if example_image:
             self.clipboard_manager.copy_image_to_clipboard(self.project_manager.get_full_path(
-                "example_images", subclass_data["example_image"]))
+                "example_images", example_image))
 
             search_box = self.driver.find_element(By.NAME, "text")
             ActionChains(self.driver).key_down(Keys.CONTROL).send_keys("v")\
                 .key_up(Keys.CONTROL).perform()
 
-            WebDriverWait(self.driver, 5).until(
-                EC.presence_of_element_located((
-                    By.CSS_SELECTOR, ".CbirIntent.cbir-intent.cbir-intent_visible_yes.i-bem.cbir-intent_js_inited.cbir-intent_loaded_yes")))
-            search_box = WebDriverWait(self.driver, 5).until(
-                EC.presence_of_element_located((By.TAG_NAME, "textarea")))
-            search_box.send_keys(subclass_data["search_query"])
-            time.sleep(0.5)
-            search_box.send_keys(Keys.ENTER)
+            try:
+                WebDriverWait(self.driver, 5).until(
+                    EC.presence_of_element_located((
+                        By.CSS_SELECTOR, ".CbirIntent.cbir-intent.cbir-intent_visible_yes.i-bem.cbir-intent_js_inited.cbir-intent_loaded_yes")))
+                search_box = WebDriverWait(self.driver, 5).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "textarea")))
+                search_box.send_keys(subclass_data["search_query"])
+                time.sleep(0.5)
+                search_box.send_keys(Keys.ENTER)
+                while self._is_running:
+                    try:
+                        WebDriverWait(self.driver, 10).until(
+                            EC.presence_of_element_located((
+                                By.XPATH, "//a[text()='Похожие' and @class='CbirNavigation-TabsItem CbirNavigation-TabsItem_name_similar-page']"))
+                        ).click()
+                        break
+                    except: pass
+            except:
+                example_image = None
 
-            while self._is_running:
-                try:
-                    WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((
-                            By.XPATH, "//a[text()='Похожие' and @class='CbirNavigation-TabsItem CbirNavigation-TabsItem_name_similar-page']"))
-                    ).click()
-                    break
-                except: pass
-
-        else:
+        if not example_image:
             self.driver.get(f"https://yandex.ru/images/search?text={url_quote(subclass_data['search_query'])}")
 
         self.log_field.emit('Идёт прогрузка изображений...', 0)
@@ -272,17 +238,23 @@ class AutoDataset(QObject):
                     if response.status_code==200:
                         image_id = self.project_manager.save_image(
                             response.content, class_id, "validation" if validation_data and i+1>=num_images else "default")
-                        self.downloaded_images_count += 1; downloaded_images_count += 1
-                        self.update_information(
+                        self.downloaded_images_count += 1; downloaded_images_count += 1; self.update_information(
                             (f"Скачан файл {downloaded_images_count}/{images_count}, id: {image_id}", 0),
                             (subclass_data["search_query"], downloaded_images_count),
                             ("Download images", (self.downloaded_images_count, self.all_images_count)),
-                            self.project_manager.get_full_path("images", self.project_manager.get_image(image_id)["filename"]))
+                            (self.project_manager.get_full_path("images", self.project_manager.get_image(image_id)["filename"]), np.array([])))
                 else: break
             except Exception as e:
                 self.log_field.emit(f"Ошибка при скачивании файла: {e}. Id: {image_id if image_id else i}", 0)
 
         self.chrome_widget_lock.emit(False)
+
+
+    def update_project_data(self):
+        self.project_data = {
+            "configuration": self.project_manager.get_configutation(),
+            "classes": self.project_manager.get_all_classes_conf()
+        }
 
 
     @pyqtSlot()
@@ -294,21 +266,22 @@ class AutoDataset(QObject):
             target=self.always_switch_to_main_window, daemon=True)
         self.always_switch_to_main_window_thread.start()
 
-        self.project_data = {
-            "configuration": self.project_manager.get_configutation(),
-            "classes": self.project_manager.get_all_classes_conf()
-        }
-
+        self.update_project_data()
         self.downloaded_images_count = 0
+        self.created_annotations_count = 0
         self.all_images_count = sum([int(self.project_data["configuration"]["images_per_class"] * 1.2) for _ in self.project_data["classes"]])
+
         self.stage_updated.emit("Download images", (self.downloaded_images_count, self.all_images_count))
+        if self.project_data["configuration"]["annotation"]:
+            self.stage_updated.emit("Create annotation", (self.created_annotations_count, self.all_images_count))
+
         self.log_field.emit('Установка изображений...\n', 1)
         for class_data in self.project_data["classes"]:
             for subclass_data in class_data["subclasses"]:
                 if class_data["enabled"] and self._is_running:
                     img_counts = round(self.project_data["configuration"]["images_per_class"]/len(class_data["subclasses"]))
                     val_img_counts = (img_counts // 5) if self.project_data["configuration"]["validation_data"] else 0
-                    must_img_counts = img_counts+val_img_counts
+                    must_img_counts, must_val_img_counts = img_counts, val_img_counts
                     def_count, def_val_count = [len(self.project_manager.get_images(class_data["id"], dat_type))\
                                                 for dat_type in ["default", "validation"]]
                     img_counts -= def_count; val_img_counts -= def_val_count
@@ -316,9 +289,31 @@ class AutoDataset(QObject):
                     all_imgs = def_count+def_val_count; self.downloaded_images_count += all_imgs; self.update_information(
                         (f'INFO: В классе {subclass_data["search_query"]} уже присутствует изображений: {all_imgs}.', 1),
                         (subclass_data["search_query"], all_imgs), ("Download images", (self.downloaded_images_count, self.all_images_count)))
-                    if (img_counts or val_img_counts) and (must_img_counts!=all_imgs):
-                        self.download_images(subclass_data, img_counts, class_data["class_id"], val_img_counts, all_imgs)
+                    if (img_counts or val_img_counts) and (must_img_counts+must_val_img_counts!=all_imgs):
+                        self.download_images(subclass_data, class_data["class_id"], must_img_counts, must_val_img_counts, all_imgs)
         self.log_field.emit('Готово! Изображения скачаны.\n', 2)
+
+        if self.project_data["configuration"]["annotation"]:
+            self.log_field.emit('Создание аннотаций...\n', 1)
+            all_images = self.project_manager.get_images(type="default")+self.project_manager.get_images(type="validation")
+            self.all_images_count = len(all_images)
+            for i, image_data in enumerate(all_images):
+                image_path = self.project_manager.get_full_path("images", image_data["filename"])
+                image = open_image(image_path)
+                object_detector = ImageAnnotationDetector(image)
+                object_detector.remove_bg()
+                object_detector.detect_contours()
+                object_detector.smooth_contours()
+                object_detector.filter_contours_to_needed()
+                annotation_data = object_detector.calculate_bboxes_data()
+                bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
+                image_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
+                self.created_annotations_count += 1; self.update_information(
+                    (f"Создана аннотация №{i+1}, данные изображения: {image_data}", 0),
+                    stage_updated=("Create annotation", (self.created_annotations_count, self.all_images_count)),
+                    cur_image=(image_path, cv2.cvtColor(object_detector.put_contours_on_image(image), cv2.COLOR_BGR2RGB)))
+                if not self._is_running:
+                    break
 
         if not self._is_running:
             self.log_field.emit('Работа остановлена\n\n\n', 1)

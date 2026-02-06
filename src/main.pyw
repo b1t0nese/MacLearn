@@ -32,7 +32,7 @@ class App:
                     self.autodataset_thread = None
                 except: pass
             self.project_data = Project(project_path)
-            self.autodataset_worker = AutoDataset(self.project_data)
+            self.autodataset_worker = AutoDataset(self.project_data, 144)
             self.windowUI.initUI()
             self.init_config_window()
             self.init_project_conf_in_window()
@@ -280,12 +280,7 @@ class App:
 
 
 
-def main():
+if __name__ == "__main__":
     application = QApplication(sys.argv)
     app = App()
     app.start(application)
-
-
-
-if __name__ == "__main__":
-    main()

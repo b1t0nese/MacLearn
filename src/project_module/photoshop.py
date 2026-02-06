@@ -2,6 +2,62 @@ import cv2
 from cv2.typing import MatLike
 import numpy as np
 import rembg
+import random
+
+
+
+def open_image(file_path: str) -> MatLike:
+    with open(file_path, 'rb') as f:
+        img_array = np.frombuffer(f.read(), dtype=np.uint8)
+        image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+    return image
+
+
+def resize_image(img: MatLike, target_size: tuple=(300, 300)) -> MatLike:
+    height, width = img.shape[:2]
+    scale = min(target_size[0] / width, target_size[1] / height)
+    new_width, new_height = int(width * scale), int(height * scale)
+    resized_img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+    return resized_img
+
+
+def distort_image(img: MatLike, distortion_type=None, fill_color=None) -> MatLike:
+    if distortion_type is None:
+        distortion_type = random.choice(["blur", "noise", "rotation", "perspective"])
+    if fill_color is None:
+        fill_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+
+    if distortion_type == "blur":
+        blur_amount = random.randint(3, 15)
+        if blur_amount % 2 == 0:
+            blur_amount += 1
+        distorted_img = cv2.GaussianBlur(img, (blur_amount, blur_amount), 0)
+    elif distortion_type == "noise":
+        row, col, ch = img.shape
+        noise_level = random.randint(0, 10)
+        gauss = np.random.normal(0, noise_level, (row, col, ch)).astype('uint8')
+        distorted_img = cv2.add(img, gauss)
+    elif distortion_type == "rotation":
+        angle = random.randint(-30, 30)
+        height, width = img.shape[:2]
+        center = (width // 2, height // 2)
+        rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+        distorted_img = cv2.warpAffine(img, rotation_matrix, (width, height), borderValue=fill_color)
+    elif distortion_type == "perspective":
+        height, width = img.shape[:2]
+        max_offset = min(width, height) // 4
+        pts1 = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
+        offset1 = (random.randint(0, max_offset), random.randint(0, max_offset))
+        offset2 = (width - random.randint(0, max_offset), random.randint(0, max_offset))
+        offset3 = (random.randint(0, max_offset), height - random.randint(0, max_offset))
+        offset4 = (width - random.randint(0, max_offset), height - random.randint(0, max_offset))
+        pts2 = np.float32([offset1, offset2, offset3, offset4])
+        matrix = cv2.getPerspectiveTransform(pts1, pts2)
+        distorted_img = cv2.warpPerspective(img, matrix, (width, height), borderMode=cv2.BORDER_CONSTANT, borderValue=fill_color)
+    else:
+        distorted_img = None
+
+    return distorted_img
 
 
 

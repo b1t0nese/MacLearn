@@ -178,15 +178,35 @@ class Dataset:
                 con.commit()
                 return int(cur.lastrowid)
 
+    def change_image(self, image_id: int=None, filename: str=None,
+                     class_id: int=None, type: str=None, annotation: list=None) -> dict:
+        with self.get_connection() as con:
+            cur = con.cursor()
+            if filename and not image_id:
+                image_id = cur.execute(
+                    "SELECT id FROM dataset WHERE filename = ?", (filename,)).fetchone()[0]
+            elif not filename and not image_id:
+                return False
+            sql, params = "UPDATE dataset SET", []
+            if class_id:
+                sql += " class_id=?,"; params.append(class_id)
+            if type:
+                sql += " type=?,"; params.append(type)
+            if annotation:
+                sql += " annotation=?,"
+                params.append(json.dumps(annotation, ensure_ascii=False))
+            sql = sql.rstrip(",")+" WHERE id=?"
+            cur.execute(sql, tuple(params+[image_id]))
+            return dict(cur.execute("SELECT * FROM dataset WHERE id = ?", (image_id,)).fetchone())
+
     def del_image(self, image_id: int=None, filename: str=None) -> bool:
         with self.get_connection() as con:
             cur = con.cursor()
-            if not filename:
-                if image_id:
-                    filename = cur.execute("SELECT filename FROM dataset "+\
-                                        "WHERE id = ?", (image_id,)).fetchone()[0]
-                else:
-                    return False
+            if not filename and image_id:
+                filename = cur.execute(
+                    "SELECT filename FROM dataset WHERE id = ?", (image_id,)).fetchone()[0]
+            else:
+                return False
             cur.execute("DELETE FROM dataset "+\
                         "WHERE id = ? OR filename = ?", (image_id, filename,))
             con.commit()
@@ -200,7 +220,7 @@ class Dataset:
         with self.get_connection() as con:
             cur = con.cursor()
             result = dict(cur.execute("SELECT * FROM dataset WHERE id = ? OR filename = ?",
-                                    (image_id, filename,)).fetchone())
+                                      (image_id, filename,)).fetchone())
             result["annotation"] = json.loads(result["annotation"])
             return result
 
