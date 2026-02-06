@@ -405,13 +405,24 @@ class MainWindowUI(QMainWindow):
         progress_status = sum(map(lambda x: x[1][0], self.autodataset_main_status.items()))
         full_progress_status = sum(map(lambda x: x[1][1], self.autodataset_main_status.items()))
         progress_proc = round(progress_status / full_progress_status * 100) if progress_status and full_progress_status else 0
+        progress_proc = progress_proc if progress_proc < 100 else 100
         self.autodataset_tab.work_tab.progress_bar.setValue(progress_proc if not progress else progress)
 
     def autodataset_log(self, text: str, otstup: int=0):
         self.autodataset_tab.work_tab.text_logs.append('\n'*otstup+f'[{datetime.now().strftime("%H:%M:%S")}] {text}')
 
-    def autodataset_set_image(self, image_path: str):
-        pixmap = QPixmap.fromImage(QImage(image_path))
+    def autodataset_set_image(self, image_path: str, np_rgb_image=None):
+        if np_rgb_image is not None and np_rgb_image.size > 0:
+            qimage = QImage(
+                np_rgb_image.data, 
+                np_rgb_image.shape[1], 
+                np_rgb_image.shape[0], 
+                np_rgb_image.shape[1] * 3, 
+                QImage.Format.Format_RGB888
+            )
+        else:
+            qimage = QImage(image_path)
+        pixmap = QPixmap.fromImage(qimage)
         self.autodataset_tab.work_tab.label_image.setPixmap(
             pixmap.scaled(
                 self.autodataset_tab.work_tab.label_image.width(),

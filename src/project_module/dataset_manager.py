@@ -1,12 +1,12 @@
 import datetime
 import getpass
 import shutil
-import numpy
 import yaml
 import cv2
 import os
 
 from .project_manager import Project
+from .photoshop import resize_image, open_image
 
 
 AVAILABLE_FORMATS = {}
@@ -19,21 +19,10 @@ def register_formatter(name):
 
 
 
-def resize_image(img: numpy.ndarray, target_size: tuple=(300, 300)) -> numpy.ndarray:
-    height, width = img.shape[:2]
-    scale = min(target_size[0] / width, target_size[1] / height)
-    new_width, new_height = int(width * scale), int(height * scale)
-    resized_img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
-    return resized_img
-
-
-
 def export_image(first_path: str, dist_path: str, resize_size: tuple=None):
     if os.path.exists(dist_path):
         os.remove(dist_path)
-    with open(first_path, 'rb') as f:
-        img_array = numpy.frombuffer(f.read(), dtype=numpy.uint8)
-        image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+    image = open_image(first_path)
     if resize_size:
         image = resize_image(image, resize_size)
     _, encoded_image = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 95])
