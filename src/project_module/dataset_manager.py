@@ -114,7 +114,7 @@ class YOLOdataset(Project):
                                 f.write(f"{classes_ids[label[0]]} {obj_annotaion}")
 
 
-    def export(self):
+    def export(self) -> tuple[bool, str]:
         self.clear()
         try:
             classes_config = self.get_all_classes_conf(True)
@@ -129,7 +129,7 @@ class YOLOdataset(Project):
             return False, f"Датасет не был создан. Ошибка: {e}"
 
 
-    def put_data(self, dataset_path: str):
+    def put_data(self, dataset_path: str) -> tuple[bool, str]:
         try:
             os.makedirs(dataset_path, exist_ok=True)
             source_dir = self.get_full_path("dataset")
