@@ -163,6 +163,11 @@ class Dataset:
                 result.append(class_data)
             return result
 
+    def get_classes_ids_numbers(self) -> dict[int, int]:
+        classes_conf = self.get_all_classes_conf()
+        classes_ids = sorted(map(lambda x: x["class_id"], classes_conf))
+        return dict([(x, i) for i, x in enumerate(classes_ids)])
+
 
     def save_image(self, image_bytes: bytes, class_id: int,
                    type: str="default", annotation: list=[]) -> int:
@@ -386,49 +391,3 @@ class Project(Dataset):
                     _traverse(item)
         _traverse(data)
         return results
-
-
-
-if __name__ == "__main__": # Тест работы БД, вводим путь к проекту и проверяем вывод
-    dataset = Project(input())
-    dataset.set_configutation({
-        "validation_data": False,
-        "augmented_images": False,
-        "annotation": True,
-        "dataset_format": "YOLO",
-        "images_per_class": 100,
-        "images_size": "320x240"
-    })
-    print("Configuration:", json.dumps(dataset.get_configutation(), indent=2, ensure_ascii=False), "\n")
-    dataset.add_or_upd_class_conf("Гоночный транспорт")
-    dataset.add_or_upd_class_conf("Гоночный транспорт", subclasses=[
-        {"search_query": "спорткар maclaren",
-         "example_image": "sportkar_maclaren.jpg"},
-        {"search_query": "болид формула 1",
-         "example_image": "bolid_formula_1.jpg"},
-        {"search_query": "мотоцикл",
-         "example_image": "mototsikl.jpg"}
-    ])
-    dataset.add_or_upd_class_conf("Городской транспорт", False, [
-        {"search_query": "Автобус",
-         "example_image": ""},
-        {"search_query": "Троллейбус",
-         "example_image": ""}
-    ])
-    dataset.add_or_upd_class_conf("Ненужный класс")
-    dataset.del_class_conf(class_name="Ненужный класс")
-    print('Class "Городской транспорт" data:',
-          dataset.get_class_conf(class_name="Городской транспорт"), "\n")
-    print('All classes data:', dataset.get_all_classes_conf(), "\n")
-    import requests, random
-    image_request = requests.get("https://top-tuning.ru/w1200h627/upload/images/news/102829/2019-mclaren-600lt-limited-edition-1.jpg")
-    for i in range(1000):
-        image_id = dataset.save_image(
-            image_request.content, random.randint(1, len(dataset.get_all_classes_conf())),
-            random.choice(["default", "augment"]), [random.randint(0, 100)/100 for i in range(4)])
-    for i in range(1, 500, 2):
-        dataset.del_image(i)
-    print(f'Image {image_id} data:', dataset.get_image(image_id), "\n")
-    print(f'Images from class "Гоночный транспорт" data:',
-          str(dataset.get_images(dataset.get_class_conf(class_name="Гоночный транспорт")["id"]))[:1000]+"...\n")
-    print('All images data:', str(dataset.get_images())[:1000]+"...")

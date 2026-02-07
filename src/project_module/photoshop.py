@@ -63,7 +63,7 @@ def distort_image(img: MatLike, distortion_type=None, fill_color=None) -> MatLik
 
 class ImageAnnotation:
     def formate_bbox(bbox: tuple[int], img_size: tuple[int]=None,
-                     new_img_size: tuple[int]=None, type: str=None) -> str:
+                     new_img_size: tuple[int]=None, ann_type: str=None) -> str:
         """
         Formate bbox for new image or other annotation type
 
@@ -73,8 +73,8 @@ class ImageAnnotation:
         :type img_size: tuple[int] = None
         :param new_img_size: Optionally: (w, h) of the image to create a new annotation for
         :type new_img_size: tuple[int] = None
-        :param type: the name of the annotation type used, available: "YOLO", "COCO", "PASCAL_VOC", None (default bbox)
-        :type type: str = "COCO"
+        :param ann_type: the name of the annotation type used, available: "YOLO", "COCO", "PASCAL_VOC", None (default bbox)
+        :type ann_type: str = None
         :return: formatted annotation as string
         """
         end_img_size = new_img_size if new_img_size else img_size
@@ -89,15 +89,15 @@ class ImageAnnotation:
         else:
             x, y, w, h = bbox
 
-        if type=="YOLO" and end_img_size:
+        if ann_type=="YOLO" and end_img_size:
             yolo_x_center, yolo_y_center = (x + w/2) / img_size[0], (y + h/2) / img_size[1]
             yolo_width, yolo_height = w / img_size[0], h / img_size[1]
             return f"{yolo_x_center:.6f} {yolo_y_center:.6f} {yolo_width:.6f} {yolo_height:.6f}"
 
-        elif type=="COCO":
+        elif ann_type=="COCO":
             return f"[{x}, {y}, {w}, {h}]"
 
-        elif type=="PASCAL_VOC":
+        elif ann_type=="PASCAL_VOC":
             return f"<xmin>{x}</xmin><ymin>{y}</ymin><xmax>{x+w}</xmax><ymax>{y+h}</ymax>"
     
         else:
