@@ -6,7 +6,7 @@ import cv2
 import os
 
 from .project_manager import Project
-from .photoshop import resize_image, open_image
+from .photoshop import *
 
 
 AVAILABLE_FORMATS = {}
@@ -79,8 +79,8 @@ class YOLOdataset(Project):
             'date': datetime.datetime.now().strftime('%Y-%m-%d'),
             'description': 'Dataset created with MacLearn https://github.com/b1t0nese/MacLearn'
         }
-        with open(self.get_full_path("dataset", "data.yaml"), 'w') as f:
-            yaml.dump(yaml_content, f, default_flow_style=False)
+        with open(self.get_full_path("dataset", "data.yaml"), 'w', encoding="utf-8") as f:
+            yaml.dump(yaml_content, f, default_flow_style=False, allow_unicode=True)
 
 
     def export_data(self, classes_config: list=[], images_size: str="320x240"):
@@ -98,16 +98,20 @@ class YOLOdataset(Project):
 
     def create_annotations(self):
         self.add_skipped_paths()
+        classes_ids = self.get_classes_ids_numbers()
         for p1 in ["train", "val"]:
             for p2 in self.project_paths["dataset"][p1].keys():
                 for filename, _ in self.project_paths["dataset"][p1][p2].items():
                     if _ is None:
                         image_data = self.get_image(filename=filename)
+                        old_img_size = open_image(self.get_full_path("images", filename)).shape[:2]
+                        new_img_size = open_image(self.get_full_path("dataset", p1, p2, filename)).shape[:2]
                         label_path = os.path.join(self.get_full_path("dataset", p1, p2, "labels"),
                                                   f"{filename.split('.')[0]}.txt")
                         with open(label_path, "w") as f:
                             for label in image_data["annotation"]:
-                                f.write(" ".join(map(str, label)))
+                                obj_annotaion = ImageAnnotation.formate_bbox(tuple(label[1:]), old_img_size, new_img_size, "YOLO")
+                                f.write(f"{classes_ids[label[0]]} {obj_annotaion}")
 
 
     def export(self):
