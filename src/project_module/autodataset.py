@@ -6,6 +6,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.core.driver_cache import DriverCacheManager
 from webdriver_manager.chrome import ChromeDriverManager
 from undetected_chromedriver import Chrome
 from PIL import Image
@@ -128,12 +129,12 @@ class AutoDataset(QObject):
         if cur_image: self.cur_image_label.emit(*cur_image)
 
 
-    def __init__(self, project_manager: Project, chrome_version: int=None, headless_chrome: bool=False):
+    def __init__(self, project_manager: Project, chromedriver_path: str=None, chrome_version: int=None):
         super().__init__()
         self._is_running = False
 
         service = Service(ChromeDriverManager().install())
-        self.driver = Chrome(service=service, version_main=chrome_version, headless=headless_chrome)
+        self.driver = Chrome(service=service, driver_executable_path=chromedriver_path, version_main=chrome_version)
         self.clipboard_manager = ClipboardManager()
 
         self.project_manager = project_manager
@@ -250,31 +251,7 @@ class AutoDataset(QObject):
         self.chrome_widget_lock.emit(False)
 
 
-    def update_project_data(self):
-        self.project_data = {
-            "configuration": self.project_manager.get_configutation(),
-            "classes": self.project_manager.get_all_classes_conf()
-        }
-
-
-    @pyqtSlot()
-    def run(self):
-        self._is_running = True
-        self.log_field.emit('Начало работы.\n', 0)
-
-        self.always_switch_to_main_window_thread = threading.Thread(
-            target=self.always_switch_to_main_window, daemon=True)
-        self.always_switch_to_main_window_thread.start()
-
-        self.update_project_data()
-        self.downloaded_images_count = 0
-        self.created_annotations_count = 0
-        self.all_images_count = sum([int(self.project_data["configuration"]["images_per_class"] * 1.2) for _ in self.project_data["classes"]])
-
-        self.stage_updated.emit("Download images", (self.downloaded_images_count, self.all_images_count))
-        if self.project_data["configuration"]["annotation"]:
-            self.stage_updated.emit("Create annotation", (self.created_annotations_count, self.all_images_count))
-
+    def download_images_data(self):
         self.log_field.emit('Установка изображений...\n', 1)
         for class_data in self.project_data["classes"]:
             for subclass_data in class_data["subclasses"]:
@@ -293,32 +270,76 @@ class AutoDataset(QObject):
                         self.download_images(subclass_data, class_data["class_id"], must_img_counts, must_val_img_counts, all_imgs)
         self.log_field.emit('Готово! Изображения скачаны.\n', 2)
 
+
+    def create_annotation(self):
+        self.log_field.emit('Создание аннотаций...\n', 1)
+        all_images = []
+        for images_type in ["default", "validation"]:
+            all_images += self.project_manager.get_images(type=images_type)
+        self.all_images_count = len(all_images)
+        for i, image_data in enumerate(all_images):
+            image_path = self.project_manager.get_full_path("images", image_data["filename"])
+            image = open_image(image_path)
+            object_detector = ImageAnnotationDetector(image)
+            object_detector.remove_bg()
+            object_detector.detect_contours()
+            object_detector.smooth_contours()
+            object_detector.filter_contours_to_needed()
+            annotation_data = object_detector.calculate_bboxes_data()
+            bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
+            image_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
+            self.created_annotations_count += 1; self.update_information(
+                (f"Создана аннотация №{i+1}, данные изображения: {image_data}", 0),
+                stage_updated=("Create annotation", (self.created_annotations_count, self.all_images_count)),
+                cur_image=(image_path, cv2.cvtColor(object_detector.put_contours_on_image(image), cv2.COLOR_BGR2RGB)))
+            if not self._is_running:
+                break
+        self.log_field.emit('Готово! Аннотация создана.\n', 2)
+
+
+    def update_project_data(self):
+        self.project_data = {
+            "configuration": self.project_manager.get_configutation(),
+            "classes": self.project_manager.get_all_classes_conf()
+        }
+
+
+    @pyqtSlot()
+    def run(self, download_images: bool=True, annotation: bool=True, augmentation: bool=True):
+        self._is_running = True
+        self.log_field.emit('Начало работы.\n', 0)
+
+        self.always_switch_to_main_window_thread = threading.Thread(
+            target=self.always_switch_to_main_window, daemon=True)
+        self.always_switch_to_main_window_thread.start()
+
+        self.update_project_data()
+        self.downloaded_images_count = 0
+        self.created_annotations_count = 0
+        self.all_images_count = sum([int(self.project_data["configuration"]["images_per_class"] * 1.2) for _ in self.project_data["classes"]])
+
+        self.stage_updated.emit("Download images", (self.downloaded_images_count, self.all_images_count))
         if self.project_data["configuration"]["annotation"]:
-            self.log_field.emit('Создание аннотаций...\n', 1)
-            all_images = self.project_manager.get_images(type="default")+self.project_manager.get_images(type="validation")
-            self.all_images_count = len(all_images)
-            for i, image_data in enumerate(all_images):
-                image_path = self.project_manager.get_full_path("images", image_data["filename"])
-                image = open_image(image_path)
-                object_detector = ImageAnnotationDetector(image)
-                object_detector.remove_bg()
-                object_detector.detect_contours()
-                object_detector.smooth_contours()
-                object_detector.filter_contours_to_needed()
-                annotation_data = object_detector.calculate_bboxes_data()
-                bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
-                image_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
-                self.created_annotations_count += 1; self.update_information(
-                    (f"Создана аннотация №{i+1}, данные изображения: {image_data}", 0),
-                    stage_updated=("Create annotation", (self.created_annotations_count, self.all_images_count)),
-                    cur_image=(image_path, cv2.cvtColor(object_detector.put_contours_on_image(image), cv2.COLOR_BGR2RGB)))
-                if not self._is_running:
-                    break
+            self.stage_updated.emit("Create annotation", (self.created_annotations_count, self.all_images_count))
+
+        if download_images:
+            self.download_images_data()
+        else:
+            self.log_field.emit('INFO: Установка изображений выключена.\n', 2)
+        if self.project_data["configuration"]["annotation"] and annotation:
+            self.create_annotation_data()
+        else:
+            self.log_field.emit('INFO: Создание аннотации выключено.\n', 2)
+        if self.project_data["configuration"]["augmentation"] and augmentation:
+            # self.create_augmentation_data()
+            pass
+        else:
+            self.log_field.emit('INFO: Создание аугментированных данных выключено.\n', 2)
 
         if not self._is_running:
-            self.log_field.emit('Работа остановлена\n\n\n', 1)
+            self.log_field.emit('Работа остановлена\n\n\n', 2)
         else:
-            self.log_field.emit('Работа окончена, данные готовы.\n\n\n', 1)
+            self.log_field.emit('Работа окончена, данные готовы.\n\n\n', 2)
 
         self._is_running = False
         self.always_switch_to_main_window_thread.join()
