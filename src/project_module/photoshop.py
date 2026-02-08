@@ -226,31 +226,3 @@ class ImageAnnotationDetector:
         for annotation in self.annotations:
             array_image_new = annotation.put_contour_on_image(array_image_new, contours, hull_contours, rectangles)
         return array_image_new
-
-
-
-def main():
-    from PIL import Image
-    my_photo = Image.open(input("Введите путь к изображению: "))
-    if not my_photo:
-        return
-    image = cv2.cvtColor(np.array(my_photo), cv2.COLOR_RGB2BGR)
-
-    object_detector = ImageAnnotationDetector(image)
-    object_detector.remove_bg()
-    object_detector.detect_contours()
-    object_detector.smooth_contours()
-    object_detector.filter_contours_to_needed()
-
-    annotation_data = object_detector.calculate_bboxes_data()
-    if annotation_data:
-        print(annotation_data[0])
-
-        cv2.imshow('Detected', object_detector.put_contours_on_image(image))
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-
-
-
-if __name__=="__main__":
-    main()
