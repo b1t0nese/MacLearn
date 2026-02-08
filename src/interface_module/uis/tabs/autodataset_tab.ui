@@ -301,6 +301,66 @@ QLabel {
         </spacer>
        </item>
        <item>
+        <widget class="QGroupBox" name="group_actions">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="styleSheet">
+            <string notr="true">
+QGroupBox { 
+    font-size: 15px; 
+    font-weight: bold; 
+    margin: 10px 20px; 
+    padding-top: 10px; 
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 20px;
+    padding: 0 5px;
+}
+            </string>
+         </property>
+         <property name="title">
+          <string>Действия</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_5">
+          <item>
+           <widget class="QCheckBox" name="check_download">
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+            <property name="text">
+             <string>Скачивание изображений</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="check_annotation">
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+            <property name="text">
+             <string>Создание аннотации</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="check_augmentation">
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+            <property name="text">
+             <string>Аугментация изображений</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QPushButton" name="btn_start">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">

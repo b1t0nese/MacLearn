@@ -1,5 +1,4 @@
-todo.txt
 __pycache__/
-test_pr/
+.vscode/
 tests/
-presentation.pptx
+todo.txt

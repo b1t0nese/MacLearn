@@ -150,7 +150,7 @@ class Dataset:
                 result["subclasses"] = json.loads(result["subclasses"])
                 return result
 
-    def get_all_classes_conf(self, enabled: bool=None) -> list:
+    def get_all_classes_conf(self, enabled: bool=None) -> list[dict]:
         with self.get_connection() as con:
             cur = con.cursor()
             classes_ids = cur.execute(f"SELECT id FROM classes_conf{\
@@ -229,7 +229,7 @@ class Dataset:
             result["annotation"] = json.loads(result["annotation"])
             return result
 
-    def get_images(self, class_id: int=None, type: str=None) -> list:
+    def get_images(self, class_id: int=None, type: str=None) -> list[dict]:
         with self.get_connection() as con:
             cur = con.cursor()
             ex, ex_atrbs = "SELECT id FROM dataset", []
@@ -262,7 +262,7 @@ class Project(Dataset):
         if not self.get_configutation():
             self.save({
                 "validation_data": True,
-                "augmented_images": False,
+                "augmentation": False,
                 "annotation": True,
                 "dataset_format": "YOLO",
                 "images_per_class": 100,
@@ -284,28 +284,19 @@ class Project(Dataset):
 
     def add_skipped_paths(self):
         base = Path(self.project_path)
-        
         def scan_all_paths(current_path, structure_node):
-            """Рекурсивно сканирует всю папку и добавляет в структуру"""
             if not current_path.exists() or not current_path.is_dir():
                 return
-                
             for item in current_path.iterdir():
                 if item.name not in structure_node:
                     if item.is_dir():
-                        # Добавляем папку
                         structure_node[item.name] = {}
-                        # Рекурсивно сканируем её содержимое
                         scan_all_paths(item, structure_node[item.name])
                     else:
-                        # Добавляем файл
                         structure_node[item.name] = None
                 else:
-                    # Если уже существует в структуре и это папка, сканируем дальше
                     if isinstance(structure_node[item.name], dict) and item.is_dir():
                         scan_all_paths(item, structure_node[item.name])
-        
-        # Сканируем корневую папку проекта
         scan_all_paths(base, self.project_paths)
 
     def get_full_path(self, *path_parts: str) -> str:

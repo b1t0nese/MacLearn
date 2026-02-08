@@ -32,7 +32,7 @@ class App:
                     self.autodataset_thread = None
                 except: pass
             self.project_data = Project(project_path)
-            self.autodataset_worker = AutoDataset(self.project_data, 144)
+            self.autodataset_worker = AutoDataset(self.project_data)
             self.windowUI.initUI()
             self.init_config_window()
             self.init_project_conf_in_window()
@@ -92,7 +92,7 @@ class App:
                 cur_class_widget.add_object(subclas["search_query"], img_fullpath)
         pr_tab = self.windowUI.project_tab
         pr_tab.cb_validation_data.setChecked(project_conf["configuration"]["validation_data"])
-        pr_tab.cb_augmented_images.setChecked(project_conf["configuration"]["augmented_images"])
+        pr_tab.cb_augmented_images.setChecked(project_conf["configuration"]["augmentation"])
         pr_tab.cb_annotation.setChecked(project_conf["configuration"]["annotation"])
         pr_tab.combo_dataset_format.setCurrentText(project_conf["configuration"]["dataset_format"])
         pr_tab.spin_images_per_class.setValue(project_conf["configuration"]["images_per_class"])
@@ -154,7 +154,7 @@ class App:
                     return False
             self.new_window(project_path)
             return True
-        else:
+        elif not (hasattr(self, 'windowUI') and self.windowUI):
             sys.exit()
 
     def save_project(self):
@@ -162,7 +162,7 @@ class App:
         local_project_conf = {
             "configuration": {
                 "validation_data": pr_tab.cb_validation_data.isChecked(),
-                "augmented_images": pr_tab.cb_augmented_images.isChecked(),
+                "augmentation": pr_tab.cb_augmented_images.isChecked(),
                 "annotation": pr_tab.cb_annotation.isChecked(),
                 "dataset_format": pr_tab.combo_dataset_format.currentText(),
                 "images_per_class": pr_tab.spin_images_per_class.value(),
@@ -202,7 +202,7 @@ class App:
 
     def export_dataset_data(self, e=None, get_path=True):
         if get_path:
-            dataset_path = QFileDialog.getExistingDirectory(None, "Выберите куда разместить датасет.", "")
+            dataset_path = QFileDialog.getExistingDirectory(None, "Выберите куда разместить датасет (можно пропустить закрыв окно).", "")
         else:
             dataset_path = None
         choiced_format = self.project_data.get_configutation()["dataset_format"]
@@ -238,7 +238,11 @@ class App:
         self.autodataset_thread = QThread()
         self.autodataset_worker.moveToThread(self.autodataset_thread)
 
-        self.autodataset_thread.started.connect(self.autodataset_worker.run)
+        self.autodataset_thread.started.connect(
+            lambda: self.autodataset_worker.run(
+                self.windowUI.autodataset_tab.work_tab.check_download.isChecked(),
+                self.windowUI.autodataset_tab.work_tab.check_annotation.isChecked(),
+                self.windowUI.autodataset_tab.work_tab.check_augmentation.isChecked()))
         self.autodataset_worker.finished.connect(self.autodataset_thread.quit)
         self.autodataset_thread.finished.connect(self.on_autodataset_finished)
 
