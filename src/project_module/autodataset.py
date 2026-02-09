@@ -110,7 +110,6 @@ class ClipboardManager:
                 os.remove(temp_path)
 
 
-
 class AutoDataset(QObject):
     finished = pyqtSignal()
     chrome_widget_lock = pyqtSignal(bool)
@@ -123,19 +122,26 @@ class AutoDataset(QObject):
 
     def update_information(self, log_emit: tuple, subclass_updated: tuple=None,
                            stage_updated: tuple=None, cur_image: tuple=None):
-        self.log_field.emit(*log_emit)
-        if subclass_updated: self.subclass_updated.emit(*subclass_updated)
-        if stage_updated: self.stage_updated.emit(*stage_updated)
-        if cur_image: self.cur_image_label.emit(*cur_image)
+        try:
+            self.log_field.emit(*log_emit)
+            if subclass_updated: self.subclass_updated.emit(*subclass_updated)
+            if stage_updated: self.stage_updated.emit(*stage_updated)
+            if cur_image: self.cur_image_label.emit(*cur_image)
+        except:
+            print(f"{log_emit[1]*"\n"}{log_emit[0]}")
 
 
     def __init__(self, project_manager: Project, chromedriver_path: str=None, chrome_version: int=None):
         super().__init__()
         self._is_running = False
 
-        service = Service(ChromeDriverManager().install())
-        self.driver = Chrome(service=service, driver_executable_path=chromedriver_path, version_main=chrome_version)
-        self.clipboard_manager = ClipboardManager()
+        try:
+            service = Service(ChromeDriverManager().install())
+            self.driver = Chrome(service=service, driver_executable_path=chromedriver_path, version_main=chrome_version)
+            self.clipboard_manager = ClipboardManager()
+        except Exception as e:
+            self.driver, self.clipboard_manager = None, None
+            self.update_information((f"ERROR (chrome start): {e}\n\n\n", 0))
 
         self.project_manager = project_manager
         self.update_project_data()
@@ -143,17 +149,23 @@ class AutoDataset(QObject):
         self.downloaded_images_count = 0
         self.created_annotations_count = 0
 
+        self.do_download_images = True
+        self.do_annotation = True
+        self.do_augmentation = True
+
 
     def close(self):
         self._is_running = False
-        self.driver.close()
-        # self.driver.quit()
+        if self.driver:
+            self.driver.close()
+            # self.driver.quit()
+        del self.driver
         del self.clipboard_manager
         del self.project_manager
 
 
     def always_switch_to_main_window(self):
-        while self._is_running:
+        while self._is_running and self.driver:
             # if self.driver.current_window_handle!=self.driver.window_handles[0]:
             self.driver.switch_to.window(self.driver.window_handles[0])
 
@@ -162,13 +174,15 @@ class AutoDataset(QObject):
                         validation_data: int=0, downloaded: int=0):
         if validation_data:
             images_count = num_images+validation_data
-            self.log_field.emit('INFO: Установка валидационных данных включена.', 0)
+            self.update_information(('INFO: Установка валидационных данных включена.', 0))
         else: images_count = num_images
         example_image = subclass_data["example_image"]
 
-        self.log_field.emit('Поиск изображений...', 0)
+        self.update_information(('Поиск изображений...', 0))
         self.driver.get("https://yandex.ru/images")
-        self.chrome_widget_lock.emit(True)
+        try:
+            self.chrome_widget_lock.emit(True)
+        except: pass
 
         if example_image:
             self.clipboard_manager.copy_image_to_clipboard(self.project_manager.get_full_path(
@@ -187,6 +201,8 @@ class AutoDataset(QObject):
                 search_box.send_keys(subclass_data["search_query"])
                 time.sleep(0.5)
                 search_box.send_keys(Keys.ENTER)
+                # self.driver.find_element(By.CSS_SELECTOR, ".HeaderDesktopActions-CbirButton").click()
+                # self.driver.find_element(By.CSS_SELECTOR, ".Button_view_action").click()
                 while self._is_running:
                     try:
                         WebDriverWait(self.driver, 10).until(
@@ -201,7 +217,7 @@ class AutoDataset(QObject):
         if not example_image:
             self.driver.get(f"https://yandex.ru/images/search?text={url_quote(subclass_data['search_query'])}")
 
-        self.log_field.emit('Идёт прогрузка изображений...', 0)
+        self.update_information(('Идёт прогрузка изображений...', 0))
         image_elements = []
         new_height = self.driver.execute_script("return document.body.scrollHeight")
         last_height = self.driver.execute_script("return document.body.scrollHeight")
@@ -223,7 +239,7 @@ class AutoDataset(QObject):
                 else: break
             last_height = new_height
 
-        self.log_field.emit('Скачивание изображений...', 0)
+        self.update_information(('Скачивание изображений...', 0))
         downloaded_images_count = downloaded
         for i, img in enumerate(image_elements):
             image_id = None
@@ -246,13 +262,15 @@ class AutoDataset(QObject):
                             (self.project_manager.get_full_path("images", self.project_manager.get_image(image_id)["filename"]), np.array([])))
                 else: break
             except Exception as e:
-                self.log_field.emit(f"Ошибка при скачивании файла: {e}. Id: {image_id if image_id else i}", 0)
+                self.update_information((f"Ошибка при скачивании файла: {e}. Id: {image_id if image_id else i}", 0))
 
-        self.chrome_widget_lock.emit(False)
+        try:
+            self.chrome_widget_lock.emit(False)
+        except: pass
 
 
     def download_images_data(self):
-        self.log_field.emit('Установка изображений...\n', 1)
+        self.update_information(('Установка изображений...\n', 1))
         for class_data in self.project_data["classes"]:
             for subclass_data in class_data["subclasses"]:
                 if class_data["enabled"] and self._is_running:
@@ -268,11 +286,11 @@ class AutoDataset(QObject):
                         (subclass_data["search_query"], all_imgs), ("Download images", (self.downloaded_images_count, self.all_images_count)))
                     if (img_counts or val_img_counts) and (must_img_counts+must_val_img_counts!=all_imgs):
                         self.download_images(subclass_data, class_data["class_id"], must_img_counts, must_val_img_counts, all_imgs)
-        self.log_field.emit('Готово! Изображения скачаны.\n', 2)
+        self.update_information(('Готово! Изображения скачаны.\n', 2))
 
 
-    def create_annotation(self):
-        self.log_field.emit('Создание аннотаций...\n', 1)
+    def create_annotation_data(self):
+        self.update_information(('Создание аннотаций...\n', 1))
         all_images = []
         for images_type in ["default", "validation"]:
             all_images += self.project_manager.get_images(type=images_type)
@@ -294,7 +312,7 @@ class AutoDataset(QObject):
                 cur_image=(image_path, cv2.cvtColor(object_detector.put_contours_on_image(image), cv2.COLOR_BGR2RGB)))
             if not self._is_running:
                 break
-        self.log_field.emit('Готово! Аннотация создана.\n', 2)
+        self.update_information(('Готово! Аннотация создана.\n', 2))
 
 
     def update_project_data(self):
@@ -305,9 +323,9 @@ class AutoDataset(QObject):
 
 
     @pyqtSlot()
-    def run(self, download_images: bool=True, annotation: bool=True, augmentation: bool=True):
+    def run(self):
         self._is_running = True
-        self.log_field.emit('Начало работы.\n', 0)
+        self.update_information(('Начало работы.\n', 0))
 
         self.always_switch_to_main_window_thread = threading.Thread(
             target=self.always_switch_to_main_window, daemon=True)
@@ -316,30 +334,39 @@ class AutoDataset(QObject):
         self.update_project_data()
         self.downloaded_images_count = 0
         self.created_annotations_count = 0
-        self.all_images_count = sum([int(self.project_data["configuration"]["images_per_class"] * 1.2) for _ in self.project_data["classes"]])
+        self.processed_images_to_augment_count = 0
+        self.all_images_count = sum([int(self.project_data["configuration"]["images_per_class"] *
+                                         (1.2 if self.project_data["configuration"]["validation_data"] else 1))
+                                     for _ in self.project_data["classes"]])
 
-        self.stage_updated.emit("Download images", (self.downloaded_images_count, self.all_images_count))
-        if self.project_data["configuration"]["annotation"]:
-            self.stage_updated.emit("Create annotation", (self.created_annotations_count, self.all_images_count))
+        if self.do_download_images and self.driver:
+            self.update_information(("Подсчёт работы 1...\n", 1), stage_updated=(
+                "Download images", (self.downloaded_images_count, self.all_images_count)))
+        if self.project_data["configuration"]["annotation"] and self.do_annotation:
+            self.update_information(("Подсчёт работы 2...\n", 1), stage_updated=(
+                "Create annotation", (self.created_annotations_count, self.all_images_count)))
+        if self.project_data["configuration"]["augmentation"] and self.do_augmentation:
+            self.update_information(("Подсчёт работы 3...\n", 1),  stage_updated=(
+                "Create augmentation data", (self.processed_images_to_augment_count, self.all_images_count)))
 
-        if download_images:
+        if self.do_download_images and self.driver:
             self.download_images_data()
         else:
-            self.log_field.emit('INFO: Установка изображений выключена.\n', 2)
-        if self.project_data["configuration"]["annotation"] and annotation:
+            self.update_information((f'''INFO: Установка изображений выключена{
+                ", Chrome не инициализировался" if not self.driver else ""}.\n''', 2))
+        if self.project_data["configuration"]["annotation"] and self.do_annotation:
             self.create_annotation_data()
         else:
-            self.log_field.emit('INFO: Создание аннотации выключено.\n', 2)
-        if self.project_data["configuration"]["augmentation"] and augmentation:
-            # self.create_augmentation_data()
-            pass
+            self.update_information(('INFO: Создание аннотации выключено.\n', 2))
+        if self.project_data["configuration"]["augmentation"] and self.do_augmentation:
+            pass #self.create_augmentation_data()
         else:
-            self.log_field.emit('INFO: Создание аугментированных данных выключено.\n', 2)
+            self.update_information(('INFO: Создание аугментированных данных выключено.\n', 2))
 
         if not self._is_running:
-            self.log_field.emit('Работа остановлена\n\n\n', 2)
+            self.update_information(('Работа остановлена\n\n\n', 2))
         else:
-            self.log_field.emit('Работа окончена, данные готовы.\n\n\n', 2)
+            self.update_information(('Работа окончена, данные готовы.\n\n\n', 2))
 
         self._is_running = False
         self.always_switch_to_main_window_thread.join()
@@ -349,4 +376,4 @@ class AutoDataset(QObject):
     @pyqtSlot()
     def stop(self):
         self._is_running = False
-        self.log_field.emit("Работа скоро остановится, пожалуйста не закрывайте это окно.\n", 1)
+        self.update_information(("Работа скоро остановится, пожалуйста не закрывайте это окно.\n", 1))

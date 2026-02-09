@@ -2,6 +2,7 @@ from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtCore import QThread, QUrl
 import qdarkstyle
+import argparse
 import sys
 
 from project_module.project_manager import Project
@@ -12,10 +13,11 @@ from interface_module.window import MainWindowUI
 
 
 class App:
-    def __init__(self):
+    def __init__(self, **config):
+        self.config = config
         self.autodataset_worker = None
         self.autodataset_thread = None
-        self.open_project()
+        self.open_project(self.config["project_path"])
 
 
     def new_window(self, project_path: str):
@@ -32,12 +34,14 @@ class App:
                     self.autodataset_thread = None
                 except: pass
             self.project_data = Project(project_path)
-            self.autodataset_worker = AutoDataset(self.project_data)
+            self.autodataset_worker = AutoDataset(
+                self.project_data, self.config["chromedriver_path"], self.config["chrome_version"])
             self.windowUI.initUI()
             self.init_config_window()
             self.init_project_conf_in_window()
             self.update_dataset_view_in_window()
-            self.windowUI.add_another_program_to_autodataset("chrome.exe")
+            if self.autodataset_worker.driver:
+                self.windowUI.add_another_program_to_autodataset("chrome.exe")
             self.windowUI.update_autodataset_statuses()
             self.windowUI.show()
         except Exception as e:
@@ -233,21 +237,21 @@ class App:
         if hasattr(self, 'autodataset_thread') and self.autodataset_thread and self.autodataset_thread.isRunning():
             return
         self.windowUI.setup_autodataset()
+        self.autodataset_worker.do_download_images = self.windowUI.autodataset_tab.work_tab.check_download.isChecked()
+        self.autodataset_worker.do_annotation = self.windowUI.autodataset_tab.work_tab.check_annotation.isChecked()
+        self.autodataset_worker.do_augmentation = self.windowUI.autodataset_tab.work_tab.check_augmentation.isChecked()
 
         self.delete_autodataset_thread()
         self.autodataset_thread = QThread()
         self.autodataset_worker.moveToThread(self.autodataset_thread)
 
-        self.autodataset_thread.started.connect(
-            lambda: self.autodataset_worker.run(
-                self.windowUI.autodataset_tab.work_tab.check_download.isChecked(),
-                self.windowUI.autodataset_tab.work_tab.check_annotation.isChecked(),
-                self.windowUI.autodataset_tab.work_tab.check_augmentation.isChecked()))
+        self.autodataset_thread.started.connect(self.autodataset_worker.run)
         self.autodataset_worker.finished.connect(self.autodataset_thread.quit)
         self.autodataset_thread.finished.connect(self.on_autodataset_finished)
 
-        self.autodataset_worker.chrome_widget_lock.connect(
-            lambda boolean: self.windowUI.autodataset_tab.program_tab.set_lock_resize(boolean))
+        if self.autodataset_worker.driver:
+            self.autodataset_worker.chrome_widget_lock.connect(
+                lambda boolean: self.windowUI.autodataset_tab.program_tab.set_lock_resize(boolean))
         self.autodataset_worker.log_field.connect(self.windowUI.autodataset_log)
         self.autodataset_worker.cur_image_label.connect(self.windowUI.autodataset_set_image)
         self.autodataset_worker.stage_updated.connect(self.windowUI.update_autodataset_main_status)
@@ -284,7 +288,23 @@ class App:
 
 
 
-if __name__ == "__main__":
+def main():
+    arg_parser = argparse.ArgumentParser(
+        "MacLearn", description="A program that will automatically assemble a "+
+        "high-quality dataset of thousands of images for you in a matter of minutes.")
+    arg_parser.add_argument("--project-path", nargs=1, type=str, default=None,
+                            help="path of your MacLearn project (skip this to choice project from explorer)")
+    arg_parser.add_argument("--chrome-version", nargs=1, type=int, default=None,
+                            help="version of Chrome installed on your computer (you can skip this, if the program is working fine)")
+    arg_parser.add_argument("--chromedriver-path", nargs=1, type=str, default=None,
+                            help="path to your chromedriver (you can skip this, if the program is working fine)")
+    arguments = arg_parser.parse_args()
+
     application = QApplication(sys.argv)
-    app = App()
+    app = App(**dict(arguments._get_kwargs()))
     app.start(application)
+
+
+
+if __name__ == "__main__":
+    main()
