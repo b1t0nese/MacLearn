@@ -129,9 +129,9 @@ class ImageAnnotation:
         self.bbox = bbox
         self.bbox_center = (bbox[0] + bbox[2]//2, bbox[1] + bbox[3]//2)
         self.bbox_area = int(cv2.contourArea(self.contour))
-        self.bbox_yolo = ImageAnnotation.formate_bbox(bbox, self.img_size, type="YOLO")
-        self.bbox_coco = ImageAnnotation.formate_bbox(bbox, type="COCO")
-        self.bbox_pascal_voc = ImageAnnotation.formate_bbox(bbox, type="PASCAL_VOC")
+        self.bbox_yolo = ImageAnnotation.formate_bbox(bbox, self.img_size, ann_type="YOLO")
+        self.bbox_coco = ImageAnnotation.formate_bbox(bbox, ann_type="COCO")
+        self.bbox_pascal_voc = ImageAnnotation.formate_bbox(bbox, ann_type="PASCAL_VOC")
 
 
     def get(self):
