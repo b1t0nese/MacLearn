@@ -6,7 +6,6 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.core.driver_cache import DriverCacheManager
 from webdriver_manager.chrome import ChromeDriverManager
 from undetected_chromedriver import Chrome
 from PIL import Image
@@ -110,6 +109,7 @@ class ClipboardManager:
                 os.remove(temp_path)
 
 
+
 class AutoDataset(QObject):
     finished = pyqtSignal()
     chrome_widget_lock = pyqtSignal(bool)
@@ -141,7 +141,7 @@ class AutoDataset(QObject):
             self.clipboard_manager = ClipboardManager()
         except Exception as e:
             self.driver, self.clipboard_manager = None, None
-            self.update_information((f"ERROR (chrome start): {e}\n\n\n", 0))
+            print(f"ERROR (chrome start): {e}")
 
         self.project_manager = project_manager
         self.update_project_data()
@@ -185,9 +185,8 @@ class AutoDataset(QObject):
         except: pass
 
         if example_image:
-            self.clipboard_manager.copy_image_to_clipboard(self.project_manager.get_full_path(
-                "example_images", example_image))
-
+            self.clipboard_manager.copy_image_to_clipboard(
+                self.project_manager.get_full_path("example_images", example_image))
             search_box = self.driver.find_element(By.NAME, "text")
             ActionChains(self.driver).key_down(Keys.CONTROL).send_keys("v")\
                 .key_up(Keys.CONTROL).perform()
@@ -201,8 +200,6 @@ class AutoDataset(QObject):
                 search_box.send_keys(subclass_data["search_query"])
                 time.sleep(0.5)
                 search_box.send_keys(Keys.ENTER)
-                # self.driver.find_element(By.CSS_SELECTOR, ".HeaderDesktopActions-CbirButton").click()
-                # self.driver.find_element(By.CSS_SELECTOR, ".Button_view_action").click()
                 while self._is_running:
                     try:
                         WebDriverWait(self.driver, 10).until(

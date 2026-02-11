@@ -4,6 +4,7 @@ from PyQt6.QtCore import QThread, QUrl
 import qdarkstyle
 import argparse
 import sys
+import os
 
 from project_module.project_manager import Project
 from project_module.autodataset import AutoDataset
@@ -22,14 +23,14 @@ class App:
 
     def new_window(self, project_path: str):
         try:
-            if hasattr(self, 'autodataset_worker') and self.autodataset_worker:
+            if self.autodataset_worker:
                 try:
-                    if hasattr(self.autodataset_worker, '_is_running') and self.autodataset_worker._is_running:
+                    if self.autodataset_worker._is_running:
                         self.stop_autodataset()
                         self.autodataset_worker.close()
                         self.autodataset_worker.deleteLater()
                     self.autodataset_worker = None
-                    if hasattr(self, 'autodataset_thread') and self.autodataset_thread:
+                    if self.autodataset_thread:
                         self.autodataset_thread.deleteLater()
                     self.autodataset_thread = None
                 except: pass
@@ -108,20 +109,21 @@ class App:
             class_overview = self.windowUI.dataset_tab.classes_tabs.get(clas["class_name"])
             if not class_overview:
                 class_overview = self.windowUI.dataset_add_class(clas["class_name"])
-            for type in ["default", "augment", "validation"]:
-                type_field = self.windowUI.get_class_field_in_dataset(clas["class_name"], type)
+            for images_type in ["default", "augment", "validation"]:
+                type_field = self.windowUI.get_class_field_in_dataset(clas["class_name"], images_type)
                 if not type_field:
-                    type_field = self.windowUI.dataset_add_class_field_by_type(clas["class_name"], type)
-                    type_field.class_delete_command = lambda e=None, c_id=clas["id"], cw=type_field, t=type, uc=True: [
-                        self.project_data.del_image(img["id"]) for img in self.project_data.get_images(c_id, t)]\
+                    type_field = self.windowUI.dataset_add_class_field_by_type(clas["class_name"], images_type)
+                    type_field.class_import_files.clicked.connect(
+                        lambda e=None, c_id=clas["id"], it=images_type: self.import_images_to_class(c_id, it))
+                    type_field.class_delete_command = lambda e=None, c_id=clas["id"], cw=type_field, it=images_type, uc=True: [
+                        self.project_data.del_image(img["id"]) for img in self.project_data.get_images(c_id, it)]\
                             if self.windowUI.dataset_delete_class_field_widget(cw, uc) else None
                     type_field.class_delete.clicked.disconnect()
                     type_field.class_delete.clicked.connect(type_field.class_delete_command)
-                for image in self.project_data.get_images(clas["id"], type):
+                for image in self.project_data.get_images(clas["id"], images_type):
                     object_widget = type_field.get_object(image["filename"])
                     if not object_widget:
-                        object_widget = type_field.add_object(
-                            image["filename"], self.project_data.get_full_path("images", image["filename"]))
+                        object_widget = type_field.add_object(image["filename"], self.project_data.get_full_path("images", image["filename"]))
                         object_widget.object_delete.clicked.disconnect()
                         object_widget.object_delete.clicked.connect(lambda e, img_id=image["id"], cw=type_field, ow=object_widget: (
                             self.project_data.del_image(img_id), cw.delete_object(ow), cw.update_layout()))
@@ -134,6 +136,16 @@ class App:
                     field.class_delete_command(uc=False)
                 self.windowUI.dataset_delete_class_overview(class_overview, False)
 
+
+    def import_images_to_class(self, class_id: int, images_type: str):
+        images_path = QFileDialog.getExistingDirectory(
+            None, "Выберите папку с изображениями, которые хотите импортировать", "")
+        if images_path:
+            images_paths = os.listdir(images_path)
+            for image_path in images_paths:
+                with open(os.path.join(images_path, image_path), "rb") as f:
+                    self.project_data.save_image(f.read(), class_id, images_type)
+            self.update_dataset_view_in_window()
 
     def open_project(self, project_path: str=None) -> bool:
         if not project_path:
@@ -274,7 +286,7 @@ class App:
             except: pass
         if self.autodataset_worker.thread() != QThread.currentThread():
             self.autodataset_worker.moveToThread(QThread.currentThread())
-        if hasattr(self, 'autodataset_thread') and self.autodataset_thread:
+        if self.autodataset_thread:
             self.autodataset_thread.deleteLater()
             self.autodataset_thread = None
 
@@ -292,11 +304,11 @@ def main():
     arg_parser = argparse.ArgumentParser(
         "MacLearn", description="A program that will automatically assemble a "+
         "high-quality dataset of thousands of images for you in a matter of minutes.")
-    arg_parser.add_argument("--project-path", nargs=1, type=str, default=None,
+    arg_parser.add_argument("--project-path", type=str, default=None,
                             help="path of your MacLearn project (skip this to choice project from explorer)")
-    arg_parser.add_argument("--chrome-version", nargs=1, type=int, default=None,
+    arg_parser.add_argument("--chrome-version", type=int, default=None,
                             help="version of Chrome installed on your computer (you can skip this, if the program is working fine)")
-    arg_parser.add_argument("--chromedriver-path", nargs=1, type=str, default=None,
+    arg_parser.add_argument("--chromedriver-path", type=str, default=None,
                             help="path to your chromedriver (you can skip this, if the program is working fine)")
     arguments = arg_parser.parse_args()
 
