@@ -290,7 +290,7 @@ class AutoDataset(QObject):
         self.update_information(('Создание аннотаций...\n', 1))
         all_images = []
         for images_type in ["default", "validation"]:
-            all_images += self.project_manager.get_images(type=images_type)
+            all_images += self.project_manager.get_images(images_type=images_type)
         self.all_images_count = len(all_images)
         for i, image_data in enumerate(all_images):
             image_path = self.project_manager.get_full_path("images", image_data["filename"])
@@ -336,14 +336,14 @@ class AutoDataset(QObject):
                                          (1.2 if self.project_data["configuration"]["validation_data"] else 1))
                                      for _ in self.project_data["classes"]])
 
-        if self.do_download_images and self.driver:
+        if self.do_download_images and self.driver and self._is_running:
             self.update_information(("Подсчёт работы 1...\n", 1), stage_updated=(
                 "Download images", (self.downloaded_images_count, self.all_images_count)))
-        if self.project_data["configuration"]["annotation"] and self.do_annotation:
-            self.update_information(("Подсчёт работы 2...\n", 1), stage_updated=(
+        if self.project_data["configuration"]["annotation"] and self.do_annotation and self._is_running:
+            self.update_information(("Подсчёт работы 2...\n", 0), stage_updated=(
                 "Create annotation", (self.created_annotations_count, self.all_images_count)))
-        if self.project_data["configuration"]["augmentation"] and self.do_augmentation:
-            self.update_information(("Подсчёт работы 3...\n", 1),  stage_updated=(
+        if self.project_data["configuration"]["augmentation"] and self.do_augmentation and self._is_running:
+            self.update_information(("Подсчёт работы 3...\n", 0),  stage_updated=(
                 "Create augmentation data", (self.processed_images_to_augment_count, self.all_images_count)))
 
         if self.do_download_images and self.driver:
