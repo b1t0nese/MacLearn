@@ -170,21 +170,21 @@ class Dataset:
 
 
     def save_image(self, image_bytes: bytes, class_id: int,
-                   type: str="default", annotation: list=[]) -> int:
+                   image_type: str="default", annotation: list=[]) -> int:
         with self.get_connection() as con:
-            img_type = get_image_type(image_bytes)
-            if img_type:
-                filename = f"{uuid.uuid4().hex[:8]}.{img_type}"
+            img_exp = get_image_type(image_bytes)
+            if img_exp:
+                filename = f"{uuid.uuid4().hex[:8]}.{img_exp}"
                 with open(os.path.join(self.images_path, filename), "wb") as f:
                     f.write(image_bytes)
                 cur = con.cursor()
                 cur.execute("INSERT INTO dataset(filename, class_id, type, annotation) "+\
-                            "VALUES(?, ?, ?, ?)", (filename, class_id, type, json.dumps(annotation)))
+                            "VALUES(?, ?, ?, ?)", (filename, class_id, image_type, json.dumps(annotation)))
                 con.commit()
                 return int(cur.lastrowid)
 
     def change_image(self, image_id: int=None, filename: str=None,
-                     class_id: int=None, type: str=None, annotation: list=None) -> dict:
+                     class_id: int=None, image_type: str=None, annotation: list=None) -> dict:
         with self.get_connection() as con:
             cur = con.cursor()
             if filename and not image_id:
@@ -195,8 +195,8 @@ class Dataset:
             sql, params = "UPDATE dataset SET", []
             if class_id:
                 sql += " class_id=?,"; params.append(class_id)
-            if type:
-                sql += " type=?,"; params.append(type)
+            if image_type:
+                sql += " type=?,"; params.append(image_type)
             if annotation:
                 sql += " annotation=?,"
                 params.append(json.dumps(annotation, ensure_ascii=False))
@@ -229,18 +229,18 @@ class Dataset:
             result["annotation"] = json.loads(result["annotation"])
             return result
 
-    def get_images(self, class_id: int=None, type: str=None) -> list[dict]:
+    def get_images(self, class_id: int=None, images_type: str=None) -> list[dict]:
         with self.get_connection() as con:
             cur = con.cursor()
             ex, ex_atrbs = "SELECT id FROM dataset", []
-            if class_id or type:
+            if class_id or images_type:
                 ex += " WHERE"
                 if class_id:
                     ex += " class_id = ?"
                     ex_atrbs.append(class_id)
-                if type:
+                if images_type:
                     ex += f"{" AND" if class_id else ""} type = ?"
-                    ex_atrbs.append(type)
+                    ex_atrbs.append(images_type)
             result = []
             for class_id in cur.execute(ex, tuple(ex_atrbs)).fetchall():
                 result.append(self.get_image(class_id[0]))
