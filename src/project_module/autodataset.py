@@ -171,9 +171,9 @@ class AutoDataset(QObject):
 
 
     def download_images(self, subclass_data: dict, class_id: int, num_images: int,
-                        validation_data: int=0, downloaded: int=0):
-        if validation_data:
-            images_count = num_images+validation_data
+                        num_val_images: int=0, downloaded: int=0):
+        if num_val_images:
+            images_count = num_images+num_val_images
             self.update_information(('INFO: Установка валидационных данных включена.', 0))
         else: images_count = num_images
         example_image = subclass_data["example_image"]
@@ -251,7 +251,7 @@ class AutoDataset(QObject):
                     response = requests.get(img_src)
                     if response.status_code==200:
                         image_id = self.project_manager.save_image(
-                            response.content, class_id, "validation" if validation_data and i+1>=num_images else "default")
+                            response.content, class_id, "validation" if num_val_images and downloaded_images_count>=num_images else "default")
                         self.downloaded_images_count += 1; downloaded_images_count += 1; self.update_information(
                             (f"Скачан файл {downloaded_images_count}/{images_count}, id: {image_id}", 0),
                             (subclass_data["search_query"], downloaded_images_count),

@@ -3,6 +3,7 @@ from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtCore import QThread, QUrl
 import qdarkstyle
 import argparse
+import shutil
 import sys
 import os
 
@@ -115,6 +116,8 @@ class App:
                     type_field = self.windowUI.dataset_add_class_field_by_type(clas["class_name"], images_type)
                     type_field.class_import_files.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_images_to_class(c_id, it))
+                    type_field.class_export_files.clicked.connect(
+                        lambda e=None, c_id=clas["id"], it=images_type: self.export_images_from_class(c_id, it))
                     type_field.class_delete_command = lambda e=None, c_id=clas["id"], cw=type_field, it=images_type, uc=True: [
                         self.project_data.del_image(img["id"]) for img in self.project_data.get_images(c_id, it)]\
                             if self.windowUI.dataset_delete_class_field_widget(cw, uc) else None
@@ -137,7 +140,23 @@ class App:
                 self.windowUI.dataset_delete_class_overview(class_overview, False)
 
 
-    def import_images_to_class(self, class_id: int, images_type: str):
+    def export_images_from_class(self, class_id: int, images_type: str="default", dist_path: str=None):
+        dist_path = QFileDialog.getExistingDirectory(
+            None, "Выберите папку, куда будут скопированы изображения", "")
+        if dist_path:
+            os.makedirs(dist_path, exist_ok=True)
+            try:
+                all_images = self.project_data.get_images(class_id, images_type)
+                for image_data in all_images:
+                    image_path = self.project_data.get_full_path("images", image_data["filename"])
+                    dist_image_path = os.path.join(dist_path, os.path.basename(image_path))
+                    shutil.copy2(image_path, dist_image_path)
+                QMessageBox.information(self.windowUI, "Успех", f"Изображения успешно скопированы в {dist_path}")
+                QDesktopServices.openUrl(QUrl.fromLocalFile(dist_path))
+            except Exception as e:
+                QMessageBox.information(self.windowUI, "Неудача", f"Изображения не экспортированы. ОШИБКА: {e}")
+
+    def import_images_to_class(self, class_id: int, images_type: str="default", images_path: str=None):
         images_path = QFileDialog.getExistingDirectory(
             None, "Выберите папку с изображениями, которые хотите импортировать", "")
         if images_path:
@@ -233,8 +252,7 @@ class App:
                     QMessageBox.information(self.windowUI, "Успех", message)
             else:
                 dataset_path = dataset_manager.get_full_path("dataset")
-            url = QUrl.fromLocalFile(dataset_path)
-            QDesktopServices.openUrl(url)
+            QDesktopServices.openUrl(QUrl.fromLocalFile(dataset_path))
         if not success:
             QMessageBox.warning(self.windowUI, "Ошибка", message)
 
