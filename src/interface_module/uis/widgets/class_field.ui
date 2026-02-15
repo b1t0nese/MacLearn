@@ -59,6 +59,31 @@ QLineEdit {
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="class_export_files">
+       <property name="styleSheet">
+        <string notr="true">
+QPushButton {
+    background-color: palette(button);
+    color: palette(button-text);
+    border: 0px solid palette(midlight);
+    font-size: 12px;
+    border-radius: 4px;
+}
+QPushButton:hover {
+    background-color: palette(dark);
+    border-color: palette(highlight);
+}
+QPushButton:pressed {
+    background-color: palette(shadow);
+}
+        </string>
+       </property>
+       <property name="text">
+        <string>🗂️ Экспорт</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="class_import_files">
        <property name="styleSheet">
         <string notr="true">

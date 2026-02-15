@@ -79,8 +79,11 @@ class ClassFieldWidget(QWidget):
         super().__init__()
         self.objects_widgets = []
 
-    def initUI(self, class_name: str=None, enabled: bool=True):
+    def initUI(self, class_name: str=None, enabled: bool=True, import_and_export_buttons: bool=True):
         uic.loadUi(os.path.join(uis_path, "widgets", "class_field.ui"), self)
+        if not import_and_export_buttons:
+            self.class_export_files.deleteLater()
+            self.class_import_files.deleteLater()
         self.class_checkbox.stateChanged.connect(self.show_class)
         self.class_delete.clicked.connect(self.delete_class)
         self.class_add_object.clicked.connect(lambda: (self.add_object(), self.update_layout()))
@@ -174,7 +177,7 @@ class MainWindowUI(QMainWindow):
 
     def project_add_class(self, class_name: str = None, enabled: bool = True) -> ClassFieldWidget:
         class_widget = ClassFieldWidget()
-        class_widget.initUI(class_name, enabled)
+        class_widget.initUI(class_name, enabled, False)
         self.project_tab.classes_vertical_layout.addWidget(class_widget)
         self.project_tab.class_objects.append(class_widget)
         class_widget.class_delete.clicked.connect(
