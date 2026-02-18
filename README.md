@@ -1,5 +1,5 @@
 # MacLearn
-![Python](https://img.shields.io/badge/Python-3.12+-blue.svg) [![Requirements](https://img.shields.io/badge/requirements.txt-blue.svg)](https://github.com/b1t0nese/MacLearn/blob/main/requirements.txt)
+![Python](https://img.shields.io/badge/Python-3.12+-blue.svg) [![Requirements](https://img.shields.io/badge/requirements.txt-blue.svg)](https://github.com/b1t0nese/MacLearn/blob/main/requirements.txt) [![PyQt6](https://img.shields.io/badge/PyQt6-green.svg)](https://doc.qt.io/qtforpython-6/)
 
 Программа, которая за считанные минуты соберёт для вас качественный датасет из тысяч изображений, скачанных из интернета.
 
@@ -18,7 +18,7 @@
 
 #
 ## Сравнение с аналогами
-| **Критерий** | **MacLearn (ваша программа)** | **Ручные инструменты (LabelImg, CVAT, Roboflow)** | **Выигрыш** |
+| **Критерий** | **MacLearn** | **Ручные инструменты (LabelImg, CVAT, Roboflow)** | **Выигрыш** |
 |--------------|-------------------------------|---------------------------------------------------|-------------|
 | **Сбор изображений** | 🚀 **Автоматический**<br>• По текстовым запросам<br>• По фото-примерам<br>• Параллельная загрузка | 🔧 **Ручной**<br>• Поиск вручную<br>• Скачивание по одному<br>• Копирование файлов | **10-100× быстрее** |
 | **Разметка (аннотация)** | 🤖 **Автоматическая/полуавтоматическая**<br>• Автоматические bounding boxes<br>• Трансфер разметки с примеров | ✍️ **Полностью ручная**<br>• Рисование рамок мышкой<br>• Ввод координат вручную<br>• Каждое изображение отдельно | **5-50× быстрее** |
