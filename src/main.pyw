@@ -123,6 +123,9 @@ class App:
                             if self.windowUI.dataset_delete_class_field_widget(cw, uc) else None
                     type_field.class_delete.clicked.disconnect()
                     type_field.class_delete.clicked.connect(type_field.class_delete_command)
+                    type_field.class_add_object.clicked.disconnect()
+                    type_field.class_add_object.clicked.connect(
+                        lambda e=None, c_id=clas["id"], it=images_type: self.import_image_to_class(c_id, it))
                 for image in self.project_data.get_images(clas["id"], images_type):
                     object_widget = type_field.get_object(image["filename"])
                     if not object_widget:
@@ -142,7 +145,7 @@ class App:
 
     def export_images_from_class(self, class_id: int, images_type: str="default", dist_path: str=None):
         dist_path = QFileDialog.getExistingDirectory(
-            None, "Выберите папку, куда будут скопированы изображения", "")
+            None, "Выберите папку, куда будут скопированы изображения", "") if not dist_path else dist_path
         if dist_path:
             os.makedirs(dist_path, exist_ok=True)
             try:
@@ -156,9 +159,17 @@ class App:
             except Exception as e:
                 QMessageBox.information(self.windowUI, "Неудача", f"Изображения не экспортированы. ОШИБКА: {e}")
 
+    def import_image_to_class(self, class_id: int, image_type: str="default", image_path: str=None):
+        image_path, file_types = QFileDialog.getOpenFileName(
+            None, "Выберите изображение, которое хотите добавить", "", "Images (*.png *.jpg)") if not image_path else image_path
+        if file_types and image_path:
+            with open(image_path, "rb") as f:
+                    self.project_data.save_image(f.read(), class_id, image_type)
+            self.update_dataset_view_in_window()
+
     def import_images_to_class(self, class_id: int, images_type: str="default", images_path: str=None):
         images_path = QFileDialog.getExistingDirectory(
-            None, "Выберите папку с изображениями, которые хотите импортировать", "")
+            None, "Выберите папку с изображениями, которые хотите импортировать", "") if not images_path else images_path
         if images_path:
             images_paths = os.listdir(images_path)
             for image_path in images_paths:
@@ -191,6 +202,8 @@ class App:
             return True
         elif not (hasattr(self, 'windowUI') and self.windowUI):
             sys.exit()
+        else:
+            return False
 
     def save_project(self):
         pr_tab = self.windowUI.project_tab
