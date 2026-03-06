@@ -77,31 +77,29 @@ class ImageAnnotation:
         :type ann_type: str = None
         :return: formatted annotation as string
         """
-        end_img_size = new_img_size if new_img_size else img_size
+        x, y, w, h = bbox
+        target_size = new_img_size if new_img_size else img_size
 
         if img_size and new_img_size:
-            (w1, h1), (w2, h2) = img_size, new_img_size
-            scale_x, scale_y = w2 / w1, h2 / h1
-            x, y, w, h = bbox
-            x, w = int(x * scale_x), int(w * scale_x)
-            y, h = int(y * scale_y), int(h * scale_y)
-            bbox = (x, y, w, h)
+            scale_x, scale_y = new_img_size[0] / img_size[0], new_img_size[1] / img_size[1]
+            x_scaled, y_scaled = x * scale_x, y * scale_y
+            w_scaled, h_scaled = w * scale_x, h * scale_y
         else:
-            x, y, w, h = bbox
+            x_scaled, y_scaled, w_scaled, h_scaled = x, y, w, h
+        x_int, y_int = int(round(x_scaled)), int(round(y_scaled))
+        w_int, h_int = int(round(w_scaled)), int(round(h_scaled))
 
-        if ann_type=="YOLO" and end_img_size:
-            yolo_x_center, yolo_y_center = (x + w/2) / img_size[0], (y + h/2) / img_size[1]
-            yolo_width, yolo_height = w / img_size[0], h / img_size[1]
-            return f"{yolo_x_center:.6f} {yolo_y_center:.6f} {yolo_width:.6f} {yolo_height:.6f}"
-
-        elif ann_type=="COCO":
-            return f"[{x}, {y}, {w}, {h}]"
-
-        elif ann_type=="PASCAL_VOC":
-            return f"<xmin>{x}</xmin><ymin>{y}</ymin><xmax>{x+w}</xmax><ymax>{y+h}</ymax>"
-    
+        if ann_type == "YOLO" and target_size:
+            x_center = (x_scaled + w_scaled / 2) / target_size[0]
+            y_center = (y_scaled + h_scaled / 2) / target_size[1]
+            width_norm, height_norm = w_scaled / target_size[0], h_scaled / target_size[1]
+            return f"{x_center:.6f} {y_center:.6f} {width_norm:.6f} {height_norm:.6f}"
+        elif ann_type == "COCO":
+            return f"[{x_int}, {y_int}, {w_int}, {h_int}]"
+        elif ann_type == "PASCAL_VOC":
+            return f"<xmin>{x_int}</xmin><ymin>{y_int}</ymin><xmax>{x_int + w_int}</xmax><ymax>{y_int + h_int}</ymax>"
         else:
-            return bbox
+            return f"{x_int} {y_int} {w_int} {h_int}"
 
 
     def __init__(self, contour: MatLike, img_size: tuple[int]):

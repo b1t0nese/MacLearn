@@ -104,8 +104,8 @@ class YOLOdataset(Project):
                 for filename, _ in self.project_paths["dataset"][p1][p2].items():
                     if _ is None:
                         image_data = self.get_image(filename=filename)
-                        old_img_size = open_image(self.get_full_path("images", filename)).shape[:2]
-                        new_img_size = open_image(self.get_full_path("dataset", p1, p2, filename)).shape[:2]
+                        old_img_size = open_image(self.get_full_path("images", filename)).shape[:2][::-1]
+                        new_img_size = open_image(self.get_full_path("dataset", p1, p2, filename)).shape[:2][::-1]
                         label_path = os.path.join(self.get_full_path("dataset", p1, p2, "labels"),
                                                   f"{filename.split('.')[0]}.txt")
                         with open(label_path, "w") as f:

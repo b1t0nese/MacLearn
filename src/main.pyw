@@ -79,11 +79,13 @@ class App:
         self.windowUI.dataset_tab.btn_update_dataset.clicked.connect(self.update_dataset_view_in_window)
         self.windowUI.dataset_tab.btn_export_dataset.clicked.connect(self.export_dataset_data)
         self.windowUI.autodataset_tab.work_tab.btn_start.clicked.connect(self.toggle_autodataset_work)
+
         self.windowUI.actionOpen.triggered.connect(self.open_project)
         self.windowUI.actionSave.triggered.connect(self.save_project)
         self.windowUI.actionSave_As.triggered.connect(self.save_project_as)
         self.windowUI.actionExport.triggered.connect(lambda e: self.export_dataset_data(e, get_path=False))
         self.windowUI.actionExport_As.triggered.connect(self.export_dataset_data)
+        self.windowUI.actionRestart.triggered.connect(lambda e: self.open_project(self.project_data.project_path))
         self.windowUI.actionExit.triggered.connect(self.close_application)
         # self.windowUI.original_close_event = self.windowUI.closeEvent
         # self.windowUI.closeEvent = self.close_application.__get__(self, type(self.windowUI))
