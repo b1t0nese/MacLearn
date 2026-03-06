@@ -8,14 +8,13 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from undetected_chromedriver import Chrome
-from PIL import Image
+from requests import get as get_request
+from threading import Thread
+from platform import system as platf_system
+from time import sleep, time as ntime
 import subprocess
-import threading
-import requests
-import platform
-import time
+import cv2
 import os
-import io
 
 from .project_manager import Project
 from .photoshop import *
@@ -24,8 +23,8 @@ from .photoshop import *
 
 class ClipboardManager:
     def __init__(self):
-        self.system = platform.system().lower()
-        self._win32clipboard = None
+        self.system = platf_system().lower()
+        self._win32clipboard, self._tempfile = None, None
         if self.system=="windows":
             self._import_windows_libs()
         elif self.system=="linux":
@@ -42,71 +41,64 @@ class ClipboardManager:
     def _check_linux_deps(self):
         if not self._check_command_exists("xclip"):
             raise RuntimeError("Установите xclip для работы с буфером обмена.")
+        import tempfile
+        self._tempfile = tempfile
 
     def _check_command_exists(self, command):
         try:
             subprocess.run([command, "-version"], 
-                         stdout=subprocess.DEVNULL, 
-                         stderr=subprocess.DEVNULL,
-                         check=True)
+                            stdout=subprocess.DEVNULL, 
+                            stderr=subprocess.DEVNULL,
+                            check=True)
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
 
 
-    def copy_image_to_clipboard(self, image_path):
-        if not os.path.exists(image_path):
-            raise FileNotFoundError(f"File not found: {image_path}")
-        image = Image.open(image_path)
-        if self.system=="windows":
-            self._copy_windows(image)
-        elif self.system=="linux":
-            self._copy_linux(image)
-        elif self.system=="darwin":
-            self._copy_macos(image)
-        else:
-            raise NotImplementedError(f"System {self.system} not supported")
+    def copy_image_to_clipboard(self, image: str | np.ndarray):
+        if isinstance(image, str):
+            if not os.path.exists(image):
+                raise FileNotFoundError(f"File not found: {image}")
+            image_array = np.fromfile(image, dtype=np.uint8)
+            image = cv2.imdecode(image_array, cv2.IMREAD_UNCHANGED)
+        if image:
+            if self.system == "windows":
+                self._copy_windows(image)
+            elif self.system == "linux":
+                self._copy_linux(image)
+            else:
+                raise NotImplementedError(f"System {self.system} not supported")
 
     def _copy_windows(self, image):
-        output = io.BytesIO()
-        image.convert("RGB").save(output, "BMP")
-        data = output.getvalue()[14:]
-        output.close()
+        success, bmp_data = cv2.imencode('.bmp', image)
+        if not success:
+            raise RuntimeError("Failed to encode image to BMP")
         if self._win32clipboard:
             self._win32clipboard.OpenClipboard()
             self._win32clipboard.EmptyClipboard()
-            self._win32clipboard.SetClipboardData(self._win32clipboard.CF_DIB, data)
+            self._win32clipboard.SetClipboardData(self._win32clipboard.CF_DIB, bmp_data.tobytes()[14:])
             self._win32clipboard.CloseClipboard()
 
     def _copy_linux(self, image):
-        if self._check_linux_deps():
-            temp_path = "/tmp/clipboard_image.png"
-            try:
-                image.save(temp_path, "PNG")
-                subprocess.run([
-                    "xclip", "-selection", "clipboard", 
-                    "-t", "image/png", 
-                    "-i", temp_path
-                ], capture_output=True, text=True, check=True)
-            except subprocess.CalledProcessError as e:
-                raise RuntimeError(f"Ошибка xclip: {e.stderr}")
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-
-    def _copy_macos(self, image):
-        temp_path = "/tmp/clipboard_image.png"
+        if not self._check_linux_deps():
+            raise RuntimeError("xclip not found. Install with: sudo apt-get install xclip")
+        success, png_data = cv2.imencode('.png', image)
+        if not success:
+            raise RuntimeError("Failed to encode image to PNG")
+        with self._tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+            tmp_file.write(png_data.tobytes())
         try:
-            image.save(temp_path, "PNG")
-            subprocess.run([
-                "osascript", "-e", 
-                f'set the clipboard to (read (POSIX file "{temp_path}") as PNG picture)'
-            ], capture_output=True, text=True, check=True)
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Ошибка AppleScript: {e.stderr}")
+            result = subprocess.run([
+                "xclip", "-selection", "clipboard", 
+                "-t", "image/png", 
+                "-i", tmp_path
+            ], capture_output=True, text=True)
+            if result.returncode != 0:
+                raise RuntimeError(f"xclip error: {result.stderr}")
         finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
 
 
@@ -198,7 +190,7 @@ class AutoDataset(QObject):
                 search_box = WebDriverWait(self.driver, 5).until(
                     EC.presence_of_element_located((By.TAG_NAME, "textarea")))
                 search_box.send_keys(subclass_data["search_query"])
-                time.sleep(0.5)
+                sleep(0.5)
                 search_box.send_keys(Keys.ENTER)
                 while self._is_running:
                     try:
@@ -219,13 +211,13 @@ class AutoDataset(QObject):
         new_height = self.driver.execute_script("return document.body.scrollHeight")
         last_height = self.driver.execute_script("return document.body.scrollHeight")
         while self._is_running:
-            scroll_st = time.time()
+            scroll_st = ntime()
             while new_height==last_height:
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 new_height = self.driver.execute_script("return document.body.scrollHeight")
-                if time.time()-scroll_st>=5:
+                if ntime()-scroll_st>=5:
                     break                
-            if time.time()-scroll_st>=5:
+            if ntime()-scroll_st>=5:
                 image_elements = self.driver.find_elements(By.CSS_SELECTOR, ".Link.ImagesContentImage-Cover")
                 # image_elements = self.driver.find_elements( # или малые изображения (обложки)
                 #     By.CSS_SELECTOR, ".ImagesContentImage-Image.ImagesContentImage-Image_clickable")
@@ -248,7 +240,7 @@ class AutoDataset(QObject):
                         EC.presence_of_element_located((By.CLASS_NAME, "MMImage-Origin"))).get_attribute('src')
                     self.driver.find_element(By.CSS_SELECTOR, ".Button.ImagesViewer-Close").click()
                     # img_src = img.get_attribute('src') # или малые изображения (обложки)
-                    response = requests.get(img_src)
+                    response = get_request(img_src)
                     if response.status_code==200:
                         image_id = self.project_manager.save_image(
                             response.content, class_id, "validation" if num_val_images and downloaded_images_count>=num_images else "default")
@@ -324,7 +316,7 @@ class AutoDataset(QObject):
         self._is_running = True
         self.update_information(('Начало работы.\n', 0))
 
-        self.always_switch_to_main_window_thread = threading.Thread(
+        self.always_switch_to_main_window_thread = Thread(
             target=self.always_switch_to_main_window, daemon=True)
         self.always_switch_to_main_window_thread.start()
 

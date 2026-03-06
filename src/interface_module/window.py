@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QHeaderView, QTabWidget,
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import QTimer, Qt
 from datetime import datetime
+import numpy as np
 import sys
 import os
 
@@ -414,15 +415,12 @@ class MainWindowUI(QMainWindow):
     def autodataset_log(self, text: str, otstup: int=0):
         self.autodataset_tab.work_tab.text_logs.append('\n'*otstup+f'[{datetime.now().strftime("%H:%M:%S")}] {text}')
 
-    def autodataset_set_image(self, image_path: str, np_rgb_image=None):
-        if np_rgb_image is not None and np_rgb_image.size > 0:
+    def autodataset_set_image(self, image_path: str | np.ndarray, np_rgb_image: bool=None):
+        if np_rgb_image is not None and np_rgb_image.size>0:
             qimage = QImage(
-                np_rgb_image.data, 
-                np_rgb_image.shape[1], 
-                np_rgb_image.shape[0], 
-                np_rgb_image.shape[1] * 3, 
-                QImage.Format.Format_RGB888
-            )
+                np_rgb_image.data, np_rgb_image.shape[1], 
+                np_rgb_image.shape[0], np_rgb_image.shape[1]*3,
+                QImage.Format.Format_RGB888)
         else:
             qimage = QImage(image_path)
         pixmap = QPixmap.fromImage(qimage)

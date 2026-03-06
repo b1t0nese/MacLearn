@@ -39,10 +39,22 @@
        <addaction name="separator"/>
        <addaction name="actionExport"/>
        <addaction name="actionExport_As"/>
-       <addaction name="separator"/>
-       <addaction name="actionExit"/>
       </widget>
       <addaction name="menuFile"/>
+      <widget class="QMenu" name="menuProgram">
+       <property name="title">
+        <string>Программа</string>
+       </property>
+       <addaction name="actionOpenSettings"/>
+       <addaction name="menuLanguage"/>
+       <addaction name="separator"/>
+       <addaction name="actionRestart"/>
+       <addaction name="actionNewWindow"/>
+       <addaction name="actionExit"/>
+       <addaction name="separator"/>
+       <addaction name="actionOpenAbout"/>
+      </widget>
+      <addaction name="menuProgram"/>
      </widget>
     </item>
     <item>
@@ -53,6 +65,11 @@
      </widget>
     </item>
    </layout>
+  </widget>
+  <widget class="QMenu" name="menuLanguage">
+   <property name="title">
+    <string>Язык / Language</string>
+   </property>
   </widget>
   <action name="actionOpen">
    <property name="text">
@@ -82,6 +99,26 @@
   <action name="actionExit">
    <property name="text">
     <string>Выход</string>
+   </property>
+  </action>
+  <action name="actionOpenSettings">
+   <property name="text">
+    <string>Настройки</string>
+   </property>
+  </action>
+  <action name="actionRestart">
+   <property name="text">
+    <string>Перезапустить</string>
+   </property>
+  </action>
+  <action name="actionNewWindow">
+   <property name="text">
+    <string>Новое окно</string>
+   </property>
+  </action>
+  <action name="actionOpenAbout">
+   <property name="text">
+    <string>О программе</string>
    </property>
   </action>
  </widget>
