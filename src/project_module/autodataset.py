@@ -12,6 +12,7 @@ from requests import get as get_request
 from threading import Thread
 from platform import system as platf_system
 from time import sleep, time as ntime
+from typing import Callable
 import subprocess
 import cv2
 import os
@@ -61,7 +62,7 @@ class ClipboardManager:
                 raise FileNotFoundError(f"File not found: {image}")
             image_array = np.fromfile(image, dtype=np.uint8)
             image = cv2.imdecode(image_array, cv2.IMREAD_UNCHANGED)
-        if image:
+        if image is not None and image.size > 0:
             if self.system == "windows":
                 self._copy_windows(image)
             elif self.system == "linux":
@@ -126,6 +127,7 @@ class AutoDataset(QObject):
     def __init__(self, project_manager: Project, chromedriver_path: str=None, chrome_version: int=None):
         super().__init__()
         self._is_running = False
+        self._image_downloaded = True
 
         try:
             service = Service(ChromeDriverManager().install())
@@ -160,6 +162,19 @@ class AutoDataset(QObject):
         while self._is_running and self.driver:
             # if self.driver.current_window_handle!=self.driver.window_handles[0]:
             self.driver.switch_to.window(self.driver.window_handles[0])
+
+
+    def download_image(self, img_src: str, class_id: int, image_type: str, do_before_download: Callable=None):
+        self._image_downloaded = False
+        try:
+            response = get_request(img_src)
+            if response.status_code==200:
+                image_id = self.project_manager.save_image(
+                    response.content, class_id, image_type)
+                do_before_download(image_id)
+        except Exception as e:
+            self.update_information((f"Ошибка при скачивании файла: {e}. src: {img_src}", 0))
+        self._image_downloaded = True
 
 
     def download_images(self, subclass_data: dict, class_id: int, num_images: int,
@@ -240,18 +255,20 @@ class AutoDataset(QObject):
                         EC.presence_of_element_located((By.CLASS_NAME, "MMImage-Origin"))).get_attribute('src')
                     self.driver.find_element(By.CSS_SELECTOR, ".Button.ImagesViewer-Close").click()
                     # img_src = img.get_attribute('src') # или малые изображения (обложки)
-                    response = get_request(img_src)
-                    if response.status_code==200:
-                        image_id = self.project_manager.save_image(
-                            response.content, class_id, "validation" if num_val_images and downloaded_images_count>=num_images else "default")
+                    def do_before_download(img_id):
+                        nonlocal downloaded_images_count, image_id, images_count
+                        image_id = img_id
                         self.downloaded_images_count += 1; downloaded_images_count += 1; self.update_information(
                             (f"Скачан файл {downloaded_images_count}/{images_count}, id: {image_id}", 0),
                             (subclass_data["search_query"], downloaded_images_count),
                             ("Download images", (self.downloaded_images_count, self.all_images_count)),
                             (self.project_manager.get_full_path("images", self.project_manager.get_image(image_id)["filename"]), np.array([])))
+                    Thread(target=self.download_image, args=(
+                        img_src, class_id, "validation" if num_val_images and downloaded_images_count>=num_images\
+                            else "default", do_before_download)).start()
                 else: break
             except Exception as e:
-                self.update_information((f"Ошибка при скачивании файла: {e}. Id: {image_id if image_id else i}", 0))
+                self.update_information((f"Ошибка при получении ссылки файла: {e}. Id: {image_id if image_id else i}", 0))
 
         try:
             self.chrome_widget_lock.emit(False)
@@ -266,14 +283,14 @@ class AutoDataset(QObject):
                     img_counts = round(self.project_data["configuration"]["images_per_class"]/len(class_data["subclasses"]))
                     val_img_counts = (img_counts // 5) if self.project_data["configuration"]["validation_data"] else 0
                     must_img_counts, must_val_img_counts = img_counts, val_img_counts
-                    def_count, def_val_count = [len(self.project_manager.get_images(class_data["id"], dat_type))\
+                    def_count, def_val_count = [round(len(self.project_manager.get_images(class_data["id"], dat_type))/len(class_data["subclasses"]))\
                                                 for dat_type in ["default", "validation"]]
                     img_counts -= def_count; val_img_counts -= def_val_count
                     img_counts, val_img_counts = (img_counts if img_counts>0 else 0), (val_img_counts if val_img_counts>0 else 0)
                     all_imgs = def_count+def_val_count; self.downloaded_images_count += all_imgs; self.update_information(
-                        (f'INFO: В классе {subclass_data["search_query"]} уже присутствует изображений: {all_imgs}.', 1),
+                        (f'INFO: В классе "{subclass_data["search_query"]}" уже присутствует изображений: {all_imgs}.', 1),
                         (subclass_data["search_query"], all_imgs), ("Download images", (self.downloaded_images_count, self.all_images_count)))
-                    if (img_counts or val_img_counts) and (must_img_counts+must_val_img_counts!=all_imgs):
+                    if img_counts or val_img_counts:
                         self.download_images(subclass_data, class_data["class_id"], must_img_counts, must_val_img_counts, all_imgs)
         self.update_information(('Готово! Изображения скачаны.\n', 2))
 
@@ -285,22 +302,23 @@ class AutoDataset(QObject):
             all_images += self.project_manager.get_images(images_type=images_type)
         self.all_images_count = len(all_images)
         for i, image_data in enumerate(all_images):
-            image_path = self.project_manager.get_full_path("images", image_data["filename"])
-            image = open_image(image_path)
-            object_detector = ImageAnnotationDetector(image)
-            object_detector.remove_bg()
-            object_detector.detect_contours()
-            object_detector.smooth_contours()
-            object_detector.filter_contours_to_needed()
-            annotation_data = object_detector.calculate_bboxes_data()
-            bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
-            image_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
-            self.created_annotations_count += 1; self.update_information(
-                (f"Создана аннотация №{i+1}, данные изображения: {image_data}", 0),
-                stage_updated=("Create annotation", (self.created_annotations_count, self.all_images_count)),
-                cur_image=(image_path, cv2.cvtColor(object_detector.put_contours_on_image(image), cv2.COLOR_BGR2RGB)))
-            if not self._is_running:
-                break
+            if not image_data["annotation"] and self._is_running:
+                image_path = self.project_manager.get_full_path("images", image_data["filename"])
+                image = open_image(image_path)
+                if image is not None and image.size > 0:
+                    object_detector = ImageAnnotationDetector(image)
+                    object_detector.remove_bg()
+                    object_detector.detect_contours()
+                    object_detector.smooth_contours()
+                    object_detector.filter_contours_to_needed()
+                    annotation_data = object_detector.calculate_bboxes_data()
+                    if annotation_data:
+                        bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
+                        image_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
+                        self.created_annotations_count += 1; self.update_information(
+                            (f"Создана аннотация №{i+1}, данные изображения: {image_data}", 0),
+                            stage_updated=("Create annotation", (self.created_annotations_count, self.all_images_count)),
+                            cur_image=(image_path, cv2.cvtColor(object_detector.put_contours_on_image(image), cv2.COLOR_BGR2RGB)))
         self.update_information(('Готово! Аннотация создана.\n', 2))
 
 
@@ -313,7 +331,7 @@ class AutoDataset(QObject):
 
     @pyqtSlot()
     def run(self):
-        self._is_running = True
+        self._is_running, self._image_downloaded = True, True
         self.update_information(('Начало работы.\n', 0))
 
         self.always_switch_to_main_window_thread = Thread(
@@ -326,7 +344,7 @@ class AutoDataset(QObject):
         self.processed_images_to_augment_count = 0
         self.all_images_count = sum([int(self.project_data["configuration"]["images_per_class"] *
                                          (1.2 if self.project_data["configuration"]["validation_data"] else 1))
-                                     for _ in self.project_data["classes"]])
+                                     for class_data in self.project_data["classes"] if class_data["enabled"]])
 
         if self.do_download_images and self.driver and self._is_running:
             self.update_information(("Подсчёт работы 1...\n", 1), stage_updated=(
