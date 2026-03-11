@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QHeaderView, QTabWidget,
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import QTimer, Qt
 from datetime import datetime
+from typing import Callable
 import numpy as np
 import sys
 import os
@@ -24,7 +25,7 @@ class ObjectCardWidget(QWidget):
     def __init__(self):
         super().__init__()
     
-    def initUI(self, object_name: str=None, object_image: str=None, click_image: callable=None):
+    def initUI(self, object_name: str=None, object_image: str=None, click_image: Callable=None):
         uic.loadUi(os.path.join(uis_path, "widgets", "object_card.ui"), self)
         self.object_image.my_image_path = ""
         if object_image:
@@ -114,7 +115,7 @@ class ClassFieldWidget(QWidget):
 
 
     def add_object(self, object_name: str = None, object_image: str = None,
-                   click_image: callable=None) -> ObjectCardWidget:
+                   click_image: Callable=None) -> ObjectCardWidget:
         object_card = ObjectCardWidget()
         object_card.initUI(object_name=object_name, object_image=object_image, click_image=click_image)
         object_card.object_delete.clicked.connect(

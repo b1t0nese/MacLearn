@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>LogWindow</class>
+ <widget class="QWidget" name="LogWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>450</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Выполнение задачи</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QGroupBox" name="group_logs">
+     <property name="styleSheet">
+      <string notr="true">QGroupBox { font-size: 14px; font-weight: bold; }</string>
+     </property>
+     <property name="title">
+      <string>Логи выполнения</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
+       <widget class="QTextEdit" name="text_logs">
+        <property name="styleSheet">
+         <string notr="true">background-color: #000000; color: #ffffff; font-family: 'Courier New'; font-size: 11px;</string>
+        </property>
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QProgressBar" name="progress_bar">
+     <property name="styleSheet">
+      <string notr="true">
+QProgressBar {
+    border: 2px solid grey;
+    border-radius: 5px;
+    text-align: center;
+}
+QProgressBar::chunk {
+    background-color: #4CAF50;
+}
+      </string>
+     </property>
+     <property name="value">
+      <number>0</number>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="btn_action">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>30</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 14px; font-weight: bold;</string>
+     </property>
+     <property name="text">
+      <string>Закрыть</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

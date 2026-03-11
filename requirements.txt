@@ -3,10 +3,10 @@ opencv-python
 rembg
 undetected-chromedriver
 selenium
-Pillow
 requests
 pywin32
 filetype
 standard-distutils
 onnxruntime
 qdarkstyle
+numpy
