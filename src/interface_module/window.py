@@ -155,6 +155,10 @@ class ClassFieldWidget(QWidget):
                 if current_row != row or current_col != col:
                     self.class_grid_layout.addWidget(widget, row, col)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.update_layout()
+
 
 
 class MainWindowUI(QMainWindow):
@@ -362,6 +366,8 @@ class MainWindowUI(QMainWindow):
         self.autodataset_tab.tab_widget.currentChanged.connect(embed_on_tab_switch)
         if self.autodataset_tab.tab_widget.currentWidget() == self.autodataset_tab.program_tab:
             self.autodataset_tab.program_tab.embed_program()
+        self.autodataset_tab.program_tab.show()
+        self.autodataset_tab.program_tab._showEvent()
 
     def setup_autodataset_interface(self):
         self.autodataset_tab.work_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.work_tab.verticalLayout_left, 25)

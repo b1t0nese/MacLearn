@@ -34,7 +34,7 @@
         <bool>false</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true">font-size: 12px; font-weight: bold;</string>
+        <string notr="true">font-size: 13px; font-weight: bold;</string>
        </property>
       </widget>
      </item>
