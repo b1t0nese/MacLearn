@@ -16,6 +16,9 @@ class EmbeddedProgramWidget(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self._showEvent()
+
+    def _showEvent(self):
         if not self.embed_attempted:
             self.embed_program()
             self.embed_attempted = True

@@ -29,15 +29,11 @@ class App:
         try:
             if self.autodataset_worker:
                 try:
-                    if self.autodataset_worker._is_running:
-                        self.stop_autodataset()
-                        self.autodataset_worker.close()
-                        self.autodataset_worker.deleteLater()
-                    self.autodataset_worker = None
-                    if self.autodataset_thread:
-                        self.autodataset_thread.deleteLater()
-                    self.autodataset_thread = None
+                    self.delete_autodataset_thread()
+                    self.autodataset_worker.close()
                 except: pass
+                self.autodataset_worker.deleteLater()
+                self.autodataset_worker = None
             self.project_data = Project(project_path)
             self.autodataset_worker = AutoDataset(
                 self.project_data, self.config["chromedriver_path"], self.config["chrome_version"])
@@ -90,6 +86,7 @@ class App:
         self.windowUI.actionExport_As.triggered.connect(self.export_dataset_data)
         self.windowUI.actionRestart.triggered.connect(lambda e: self.open_project(self.project_data.project_path))
         self.windowUI.actionExit.triggered.connect(self.close_application)
+        self.windowUI.actionOpenAbout.triggered.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/b1t0nese/MacLearn")))
         # self.windowUI.original_close_event = self.windowUI.closeEvent
         # self.windowUI.closeEvent = self.close_application.__get__(self, type(self.windowUI))
 
