@@ -11,6 +11,7 @@ from project_module.project_manager import Project
 from project_module.autodataset import AutoDataset
 from project_module.dataset_manager import AVAILABLE_FORMATS
 from interface_module.window import MainWindowUI
+from interface_module.logs_window import LogsUI
 
 
 
@@ -19,6 +20,8 @@ class App:
         self.config = config
         self.autodataset_worker = None
         self.autodataset_thread = None
+        self.appApplication = None
+        self.windowUI = None
         self.open_project(self.config["project_path"])
 
 
@@ -59,10 +62,10 @@ class App:
         sys.exit(self.appApplication.exec())
 
     def close_application(self, event=None):
-        if hasattr(self, "appApplication") and hasattr(self, "windowUI") and self.appApplication and self.windowUI:
+        if self.autodataset_worker:
             self.delete_autodataset_thread()
-            if self.autodataset_worker:
-                self.autodataset_worker.close()
+            self.autodataset_worker.close()
+        if self.appApplication and self.windowUI:
             self.windowUI.close()
             self.appApplication.quit()
         if event:
@@ -94,6 +97,7 @@ class App:
         project_conf = self.project_data.get_project_conf()
         for clas in project_conf["classes"]:
             cur_class_widget = self.windowUI.project_add_class(clas["class_name"], clas["enabled"])
+            cur_class_widget.class_data = clas.copy()
             for subclas in clas["subclasses"]:
                 img_fullpath = self.project_data.get_full_path("example_images", subclas["example_image"])\
                     if subclas["example_image"] else None
@@ -112,10 +116,11 @@ class App:
             class_overview = self.windowUI.dataset_tab.classes_tabs.get(clas["class_name"])
             if not class_overview:
                 class_overview = self.windowUI.dataset_add_class(clas["class_name"])
+            search_text = class_overview.lineEdit_search.text()
             for images_type in ["default", "augment", "validation"]:
                 type_field = self.windowUI.get_class_field_in_dataset(clas["class_name"], images_type)
                 if not type_field:
-                    type_field = self.windowUI.dataset_add_class_field_by_type(clas["class_name"], images_type)
+                    type_field = self.windowUI.dataset_add_class_field(clas["class_name"], images_type)
                     type_field.class_import_files.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_images_to_class(c_id, it))
                     type_field.class_export_files.clicked.connect(
@@ -130,11 +135,13 @@ class App:
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_image_to_class(c_id, it))
                 for image in self.project_data.get_images(clas["id"], images_type):
                     object_widget = type_field.get_object(image["filename"])
-                    if not object_widget:
+                    if (not search_text or search_text in image["filename"]) and not object_widget:
                         object_widget = type_field.add_object(image["filename"], self.project_data.get_full_path("images", image["filename"]))
                         object_widget.object_delete.clicked.disconnect()
-                        object_widget.object_delete.clicked.connect(lambda e, img_id=image["id"], cw=type_field, ow=object_widget: (
-                            self.project_data.del_image(img_id), cw.delete_object(ow), cw.update_layout()))
+                        object_widget.object_delete.clicked.connect(lambda e, img_id=image["id"], tf=type_field, ow=object_widget: (
+                            self.project_data.del_image(img_id), tf.delete_object(ow), tf.update_layout()))
+                    elif object_widget and (search_text and not search_text in image["filename"]):
+                        type_field.delete_object(object_widget)
                 type_field.update_layout()
                 type_field.show_class(clas["enabled"])
         classes_names = map(lambda x: x["class_name"], classes)
@@ -142,24 +149,36 @@ class App:
             if not class_name in classes_names:
                 for field in class_overview.fields_list:
                     field.class_delete_command(uc=False)
-                self.windowUI.dataset_delete_class_overview(class_overview, False)
+                self.windowUI.dataset_delete_class(class_overview, False)
 
 
     def export_images_from_class(self, class_id: int, images_type: str="default", dist_path: str=None):
-        dist_path = QFileDialog.getExistingDirectory(
-            None, "Выберите папку, куда будут скопированы изображения", "") if not dist_path else dist_path
-        if dist_path:
-            os.makedirs(dist_path, exist_ok=True)
-            try:
-                all_images = self.project_data.get_images(class_id, images_type)
-                for image_data in all_images:
-                    image_path = self.project_data.get_full_path("images", image_data["filename"])
-                    dist_image_path = os.path.join(dist_path, os.path.basename(image_path))
-                    shutil.copy2(image_path, dist_image_path)
-                QMessageBox.information(self.windowUI, "Успех", f"Изображения успешно скопированы в {dist_path}")
-                QDesktopServices.openUrl(QUrl.fromLocalFile(dist_path))
-            except Exception as e:
-                QMessageBox.information(self.windowUI, "Неудача", f"Изображения не экспортированы. ОШИБКА: {e}")
+        if dist_path is None:
+            dist_path = QFileDialog.getExistingDirectory(
+                None, "Выберите папку, куда будут скопированы изображения", "")
+        if not dist_path:
+            return
+        log_window = LogsUI()
+        log_window.show()
+        QApplication.processEvents()
+        os.makedirs(dist_path, exist_ok=True)
+        log_window.log(f'Экспорт изображений из класса id={class_id}, type={images_type} в "{dist_path}"\n')
+        try:
+            all_images = self.project_data.get_images(class_id, images_type)
+            total = len(all_images)
+            for i, image_data in enumerate(all_images):
+                image_path = self.project_data.get_full_path("images", image_data["filename"])
+                dist_image_path = os.path.join(dist_path, os.path.basename(image_path))
+                shutil.copy2(image_path, dist_image_path)
+                log_window.log(f'Экспортировано изображение {i+1}/{total}: {os.path.basename(image_path)} в {dist_image_path}')
+                log_window.set_progress(int((i + 1) / total * 100))
+                QApplication.processEvents()
+            log_window.log(f'Успех: изображения скопированы в {dist_path}')
+        except Exception as e:
+            log_window.log(f'Ошибка: {e}')
+        finally:
+            log_window.wait_while_not_exit()
+            QDesktopServices.openUrl(QUrl.fromLocalFile(dist_path))
 
     def import_image_to_class(self, class_id: int, image_type: str="default", image_path: str=None):
         image_path, file_types = QFileDialog.getOpenFileName(
@@ -169,14 +188,25 @@ class App:
                     self.project_data.save_image(f.read(), class_id, image_type)
             self.update_dataset_view_in_window()
 
-    def import_images_to_class(self, class_id: int, images_type: str="default", images_path: str=None):
+    def import_images_to_class(self, class_id: int, images_type: str = "default", images_path: str = None):
         images_path = QFileDialog.getExistingDirectory(
-            None, "Выберите папку с изображениями, которые хотите импортировать", "") if not images_path else images_path
+            None, "Выберите папку с изображениями, которые хотите импортировать", ""
+        ) if not images_path else images_path
         if images_path:
+            log_window = LogsUI()
+            log_window.show()
+            QApplication.processEvents()
             images_paths = os.listdir(images_path)
-            for image_path in images_paths:
-                with open(os.path.join(images_path, image_path), "rb") as f:
+            total = len(images_paths)
+            for i, image_name in enumerate(images_paths):
+                image_path = os.path.join(images_path, image_name)
+                with open(image_path, "rb") as f:
                     self.project_data.save_image(f.read(), class_id, images_type)
+                log_window.log(f'Импортировано изображение {i+1}/{total}: {image_name} в {image_path}')
+                log_window.set_progress(int((i + 1) / total * 100))
+                QApplication.processEvents()
+            log_window.log("Готово!")
+            log_window.wait_while_not_exit()
             self.update_dataset_view_in_window()
 
     def open_project(self, project_path: str=None) -> bool:
@@ -184,7 +214,7 @@ class App:
             project_path = QFileDialog.getExistingDirectory(
                 None, "Выберите папку проекта", "")
         if project_path:
-            if hasattr(self, 'windowUI') and self.windowUI:
+            if self.windowUI:
                 self.windowUI.close()
                 self.windowUI.deleteLater()
             self.windowUI = MainWindowUI()
@@ -202,7 +232,7 @@ class App:
                     return False
             self.new_window(project_path)
             return True
-        elif not (hasattr(self, 'windowUI') and self.windowUI):
+        elif not self.windowUI:
             sys.exit()
         else:
             return False
@@ -220,8 +250,9 @@ class App:
             },
             "classes_conf": []
         }
-        for i, class_obj in enumerate(self.windowUI.project_tab.class_objects):
+        for class_obj in self.windowUI.project_tab.class_objects:
             local_class = {
+                "class_id": class_obj.class_data["id"],
                 "class_name": class_obj.class_name.text(),
                 "enabled": class_obj.class_checkbox.isChecked(),
                 "subclasses": []
@@ -279,7 +310,7 @@ class App:
             self.start_autodataset()
 
     def start_autodataset(self):
-        if hasattr(self, 'autodataset_thread') and self.autodataset_thread and self.autodataset_thread.isRunning():
+        if self.autodataset_thread and self.autodataset_thread.isRunning():
             return
         self.windowUI.setup_autodataset()
         self.autodataset_worker.do_download_images = self.windowUI.autodataset_tab.work_tab.check_download.isChecked()
@@ -328,7 +359,7 @@ class App:
         self.windowUI.set_btn_start_autodataset_state(False)
 
     def stop_autodataset(self):
-        if hasattr(self, 'autodataset_worker') and self.autodataset_worker:
+        if self.autodataset_worker:
             self.autodataset_worker.stop()
 
 
