@@ -6,20 +6,78 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>760</width>
-    <height>400</height>
+    <width>900</width>
+    <height>500</height>
    </rect>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
+  <layout class="QVBoxLayout" name="verticalLayout_3">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <property name="spacing">
+    <number>0</number>
+   </property>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_header">
+     <item>
+      <widget class="QTabBar" name="tab_bar">
+       <property name="expanding">
+        <bool>false</bool>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-size: 12px; font-weight: bold;</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="lineEdit_search">
+       <property name="placeholderText">
+        <string>Поиск</string>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>200</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-size: 13px; padding: 5px;</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
    <item>
     <widget class="QGroupBox" name="overview_group">
      <property name="styleSheet">
       <string notr="true">QGroupBox { font-size: 14px; font-weight: bold; }</string>
      </property>
      <property name="title">
-      <string>Обзор</string>
+      <string>Содержимое</string>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout_2">
+     <layout class="QVBoxLayout" name="verticalLayout">
       <item>
        <widget class="QScrollArea" name="overview_scroll_area">
         <property name="verticalScrollBarPolicy">
@@ -36,12 +94,11 @@
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>720</width>
+           <width>880</width>
            <height>350</height>
           </rect>
          </property>
-         <layout class="QVBoxLayout" name="overview_vertical_layout">
-         </layout>
+         <layout class="QVBoxLayout" name="overview_vertical_layout"/>
         </widget>
        </widget>
       </item>

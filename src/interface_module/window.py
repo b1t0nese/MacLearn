@@ -223,6 +223,8 @@ class MainWindowUI(QMainWindow):
     def dataset_add_class(self, class_name: str = None) -> QWidget:
         overview_widget = uic.loadUi(os.path.join(uis_path, "widgets", "overview_class.ui"))
         overview_widget.overview_group.setTitle(class_name)
+        overview_widget.tab_bar.currentChanged.connect(
+            lambda i, ow=overview_widget: self.dataset_scroll_to_class_field(ow, i))
         self.dataset_tab.classes_tabs[class_name] = overview_widget
         self.dataset_tab.classes_tabs[class_name].fields_list = []
         if self.dataset_tab.tab_bar.count() == 0:
@@ -233,36 +235,37 @@ class MainWindowUI(QMainWindow):
         self.dataset_tab.tab_bar.addTab(class_name)
         return overview_widget
 
-    def dataset_add_class_field_by_type(self, class_name: str, type_name: str, enabled: bool = True) -> ClassFieldWidget:
-        field_widget = ClassFieldWidget()
-        field_widget.initUI(type_name, enabled)
-        field_widget.class_delete.clicked.disconnect()
-        field_widget.class_delete.clicked.connect(
-            lambda: self.dataset_delete_class_field_widget(field_widget))
-        self.dataset_tab.classes_tabs[class_name].overview_vertical_layout.addWidget(field_widget)
-        self.dataset_tab.classes_tabs[class_name].fields_list.append(field_widget)
-        return field_widget
-
-    def dataset_delete_class_overview(self, overview_class_widget: QWidget, user_call: bool=True) -> bool:
+    def dataset_delete_class(self, overview_widget: QWidget, user_call: bool=True) -> bool:
         if user_call:
             reply = QMessageBox.question(
                 self, "Удаление класса",
                 "Вы точно хотите удалить класс? Все изображения которые относились к нему также будут удалены.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
         if (not user_call) or reply == QMessageBox.StandardButton.Yes:
-            class_name_to_remove = self.get_overview_class_name_in_dataset(overview_class_widget)
+            class_name_to_remove = self.get_overview_class_name_in_dataset(overview_widget)
             if class_name_to_remove:
                 for i in range(self.dataset_tab.tab_bar.count()):
                     if self.dataset_tab.tab_bar.tabText(i) == class_name_to_remove:
                         self.dataset_tab.tab_bar.removeTab(i)
                         break
-                self.dataset_tab.content_widget.layout().removeWidget(overview_class_widget)
-                overview_class_widget.deleteLater()
+                self.dataset_tab.content_widget.layout().removeWidget(overview_widget)
+                overview_widget.deleteLater()
                 del self.dataset_tab.classes_tabs[class_name_to_remove]
                 return True
         return False
 
-    def dataset_delete_class_field_widget(self, field_widget: QWidget, user_call: bool=True) -> bool:
+    def dataset_add_class_field(self, class_name: str, field_name: str, enabled: bool = True) -> ClassFieldWidget:
+        field_widget = ClassFieldWidget()
+        field_widget.initUI(field_name, enabled)
+        field_widget.class_delete.clicked.disconnect()
+        field_widget.class_delete.clicked.connect(
+            lambda: self.dataset_delete_class_field_widget(field_widget))
+        self.dataset_tab.classes_tabs[class_name].overview_vertical_layout.addWidget(field_widget)
+        self.dataset_tab.classes_tabs[class_name].fields_list.append(field_widget)
+        self.dataset_tab.classes_tabs[class_name].tab_bar.addTab(field_name)
+        return field_widget
+
+    def dataset_delete_class_field_widget(self, field_widget: ClassFieldWidget, user_call: bool=True) -> bool:
         if user_call:
             reply = QMessageBox.question(
                 self, "Удаление данных класса", "Вы точно хотите удалить эти изображения?",
@@ -275,6 +278,10 @@ class MainWindowUI(QMainWindow):
                     class_widget = widget
                     break
             if class_widget:
+                for i in range(class_widget.tab_bar.count()):
+                    if class_widget.tab_bar.tabText(i) == field_widget.class_name.text():
+                        class_widget.tab_bar.removeTab(i)
+                        break
                 class_widget.fields_list.remove(field_widget)
                 if class_widget.overview_vertical_layout:
                     class_widget.overview_vertical_layout.removeWidget(field_widget)
@@ -290,6 +297,14 @@ class MainWindowUI(QMainWindow):
                 if field_widget.class_name.text()==field_name:
                     return field_widget
         return False
+
+    def dataset_scroll_to_class_field(self, overview_widget, index):
+        def _scroll_to_widget(widget, scroll_area):
+            pos_in_contents = widget.mapTo(scroll_area.widget(), widget.rect().topLeft())
+            scroll_area.verticalScrollBar().setValue(pos_in_contents.y() - 5)
+        if 0 <= index < len(overview_widget.fields_list):
+            QTimer.singleShot(0, lambda: _scroll_to_widget(
+                overview_widget.fields_list[index], overview_widget.overview_scroll_area))
 
     def get_overview_class_name_in_dataset(self, overview_class_widget: QWidget) -> bool | str:
         class_name = False

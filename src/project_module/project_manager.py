@@ -107,20 +107,25 @@ class Dataset:
             return conf
 
 
-    def add_or_upd_class_conf(self, class_name: str, enabled: bool = True,
-                              subclasses: list = []) -> int:
+    def add_or_upd_class_conf(self, class_id: int=None, class_name: str=None, enabled: bool = True,
+                              subclasses: list = []) -> int | bool:
         with self.get_connection() as con:
             cur = con.cursor()
-            result = cur.execute("SELECT id FROM classes_conf WHERE class_name = ?",
-                                (class_name,)).fetchone()
-            if result:
-                class_id = result[0]
-                cur.execute("UPDATE classes_conf SET enabled = ?, subclasses = ? "+\
-                            "WHERE id = ?""", (enabled, json.dumps(subclasses, ensure_ascii=False), class_id))
-            else:
+            if not class_id:
+                class_id, class_name = cur.execute("SELECT id, class_name FROM classes_conf WHERE class_name = ?",
+                                                   (class_name,)).fetchone()
+            elif not class_name:
+                class_id, class_name = cur.execute("SELECT id, class_name FROM classes_conf WHERE class_name = ?",
+                                                   (class_name,)).fetchone()
+            if class_id:
+                cur.execute("UPDATE classes_conf SET class_name = ?, enabled = ?, subclasses = ? "+\
+                            "WHERE id = ?""", (class_name, enabled, json.dumps(subclasses, ensure_ascii=False), class_id))
+            elif class_name:
                 cur.execute("INSERT INTO classes_conf (class_name, enabled, subclasses) "+\
                             "VALUES (?, ?, ?)", (class_name, enabled, json.dumps(subclasses, ensure_ascii=False)))
                 class_id = cur.lastrowid
+            else:
+                return
             con.commit()
             return class_id
 
@@ -329,11 +334,13 @@ class Project(Dataset):
                 os.remove(self.get_full_path("example_images", file))
         self.add_skipped_paths()
         self.set_configutation(configuration)
+        for class_data in self.get_all_classes_conf():
+            if class_data["id"] not in [clasdat["class_id"] for clasdat in classes_conf]:
+                self.del_class_conf(class_data["id"])
+                for image in self.get_images(class_data["id"]):
+                    self.del_image(image["id"])
         for class_data in classes_conf:
             self.add_or_upd_class_conf(**class_data)
-        for class_data in self.get_all_classes_conf():
-            if class_data["class_name"] not in [clasdat["class_name"] for clasdat in classes_conf]:
-                self.del_class_conf(class_data["id"])
 
     def save_as(self, to_path: str) -> tuple:
         try:
