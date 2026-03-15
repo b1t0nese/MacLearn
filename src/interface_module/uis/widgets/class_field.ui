@@ -51,6 +51,7 @@ QLineEdit {
     font-size: 14px;
     font-weight: bold;
 }
+QLineEdit:disabled { color: #b6b6b6; }
         </string>
        </property>
        <property name="text">

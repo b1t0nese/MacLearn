@@ -12,6 +12,7 @@ from project_module.autodataset import AutoDataset
 from project_module.dataset_manager import AVAILABLE_FORMATS
 from interface_module.window import MainWindowUI
 from interface_module.logs_window import LogsUI
+from project_module.photoshop import visualize_bbox, open_image
 
 
 
@@ -125,22 +126,23 @@ class App:
                     type_field.class_delete_command = lambda e=None, c_id=clas["id"], cw=type_field, it=images_type, uc=True: [
                         self.project_data.del_image(img["id"]) for img in self.project_data.get_images(c_id, it)]\
                             if self.windowUI.dataset_delete_class_field_widget(cw, uc) else None
-                    type_field.class_delete.clicked.disconnect()
-                    type_field.class_delete.clicked.connect(type_field.class_delete_command)
-                    type_field.class_add_object.clicked.disconnect()
-                    type_field.class_add_object.clicked.connect(
+                    type_field.class_delete.clicked.disconnect(); type_field.class_delete.clicked.connect(type_field.class_delete_command)
+                    type_field.class_add_object.clicked.disconnect(); type_field.class_add_object.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_image_to_class(c_id, it))
                 for image in self.project_data.get_images(clas["id"], images_type):
                     object_widget = type_field.get_object(image["filename"])
                     if (not search_text or search_text in image["filename"]) and not object_widget:
-                        object_widget = type_field.add_object(image["filename"], self.project_data.get_full_path("images", image["filename"]))
-                        object_widget.object_delete.clicked.disconnect()
-                        object_widget.object_delete.clicked.connect(lambda e, img_id=image["id"], tf=type_field, ow=object_widget: (
-                            self.project_data.del_image(img_id), tf.delete_object(ow), tf.update_layout()))
+                        image_data = self.project_data.get_full_path("images", image["filename"])
+                        if image["annotation"]:
+                            image_data = visualize_bbox(open_image(image_data), image["annotation"])
+                        object_widget = type_field.add_object(image["filename"], image_data, False, lambda e: None)
+                        object_widget.object_delete.clicked.disconnect(); object_widget.object_delete.clicked.connect(
+                            lambda e, img_id=image["id"], tf=type_field, ow=object_widget: (
+                                self.project_data.del_image(img_id), tf.delete_object(ow), tf.update_layout()))
                     elif object_widget and (search_text and not search_text in image["filename"]):
                         type_field.delete_object(object_widget)
-                type_field.update_layout()
                 type_field.show_class(clas["enabled"])
+        self.windowUI.dataset_update_all_class_layouts()
         classes_names = map(lambda x: x["class_name"], classes)
         for class_name, class_overview in self.windowUI.dataset_tab.classes_tabs.copy().items():
             if not class_name in classes_names:
@@ -150,9 +152,8 @@ class App:
 
 
     def export_images_from_class(self, class_id: int, images_type: str="default", dist_path: str=None):
-        if dist_path is None:
-            dist_path = QFileDialog.getExistingDirectory(
-                None, "Выберите папку, куда будут скопированы изображения", "")
+        dist_path = QFileDialog.getExistingDirectory(
+            None, "Выберите папку, куда будут скопированы изображения", "") if not dist_path else dist_path
         if not dist_path:
             return
         log_window = LogsUI()
@@ -187,24 +188,24 @@ class App:
 
     def import_images_to_class(self, class_id: int, images_type: str = "default", images_path: str = None):
         images_path = QFileDialog.getExistingDirectory(
-            None, "Выберите папку с изображениями, которые хотите импортировать", ""
-        ) if not images_path else images_path
-        if images_path:
-            log_window = LogsUI()
-            log_window.show()
+            None, "Выберите папку с изображениями, которые хотите импортировать", "") if not images_path else images_path
+        if not images_path:
+            return
+        log_window = LogsUI()
+        log_window.show()
+        QApplication.processEvents()
+        images_paths = os.listdir(images_path)
+        total = len(images_paths)
+        for i, image_name in enumerate(images_paths):
+            image_path = os.path.join(images_path, image_name)
+            with open(image_path, "rb") as f:
+                self.project_data.save_image(f.read(), class_id, images_type)
+            log_window.log(f'Импортировано изображение {i+1}/{total}: {image_name} в {image_path}')
+            log_window.set_progress(int((i + 1) / total * 100))
             QApplication.processEvents()
-            images_paths = os.listdir(images_path)
-            total = len(images_paths)
-            for i, image_name in enumerate(images_paths):
-                image_path = os.path.join(images_path, image_name)
-                with open(image_path, "rb") as f:
-                    self.project_data.save_image(f.read(), class_id, images_type)
-                log_window.log(f'Импортировано изображение {i+1}/{total}: {image_name} в {image_path}')
-                log_window.set_progress(int((i + 1) / total * 100))
-                QApplication.processEvents()
-            log_window.log("Готово!")
-            log_window.wait_while_not_exit()
-            self.update_dataset_view_in_window()
+        log_window.log("Готово!")
+        log_window.wait_while_not_exit()
+        self.update_dataset_view_in_window()
 
     def open_project(self, project_path: str=None) -> bool:
         if not project_path:

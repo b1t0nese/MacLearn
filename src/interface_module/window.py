@@ -24,47 +24,49 @@ uis_path = os.path.join(base_path, "uis")
 class ObjectCardWidget(QWidget):
     def __init__(self):
         super().__init__()
-    
-    def initUI(self, object_name: str=None, object_image: str=None, click_image: Callable=None):
+
+    def initUI(self, object_name: str=None, object_image: str | np.ndarray=None,
+               name_enabled: bool=True, click_image: Callable=None):
         uic.loadUi(os.path.join(uis_path, "widgets", "object_card.ui"), self)
         self.object_image.my_image_path = ""
-        if object_image:
+        if object_image is not None:
             self.update_object_image(object_image)
         self.object_image.mousePressEvent = self.object_image_click if not click_image else click_image
         if object_name:
             self.object_name.setText(object_name)
+        self.object_name.setEnabled(name_enabled)
         self.object_delete.clicked.connect(
             lambda: self.delete_object())
-
 
     def delete_object(self):
         self.setParent(None)
         self.deleteLater()
 
 
-    def set_object_image_pixmap(self, image_path):
-        self.object_image_pixmap = QPixmap.fromImage(QImage(image_path)).scaled(
-            self.object_image.parent().maximumWidth(),
-            self.object_image.parent().maximumHeight(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        self.object_image.my_image_path = image_path
-
-
-    def update_object_image(self, image_path: str=None) -> bool:
+    def update_object_image(self, image: str | np.ndarray | bool=None) -> bool:
         try:
-            if image_path:
-                self.set_object_image_pixmap(image_path)
-            elif not hasattr(self, "object_image_pixmap") and not self.object_image_pixmap:
-                return False
-            self.object_image.setPixmap(self.object_image_pixmap)
+            if isinstance(image, np.ndarray) and image.size>0:
+                qimage = QImage(
+                    image.data, image.shape[1], 
+                    image.shape[0], image.shape[1]*3,
+                    QImage.Format.Format_RGB888)
+                self.object_image.my_image_path = None
+            elif isinstance(image, str) or image is None:
+                qimage = QImage(image)
+                self.object_image.my_image_path = image
+            else:
+                raise ValueError(f"param image can be str, np.ndarray or None. Get {type(image)}")
+            pixmap = QPixmap.fromImage(qimage).scaled(
+                self.object_image.parent().maximumWidth(),
+                self.object_image.parent().maximumHeight(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            self.object_image.setPixmap(pixmap)
             self.object_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
             return True
         except Exception as e:
             self.object_image.setText(f"Ошибка: {e}")
             return False
-
 
     def object_image_click(self, event):
         file_dialog = QFileDialog(self)
@@ -81,7 +83,8 @@ class ClassFieldWidget(QWidget):
         super().__init__()
         self.objects_widgets = []
 
-    def initUI(self, class_name: str=None, enabled: bool=True, import_and_export_buttons: bool=True):
+    def initUI(self, class_name: str=None, enabled: bool=True,
+               import_and_export_buttons: bool=True, name_enabled: bool=True):
         uic.loadUi(os.path.join(uis_path, "widgets", "class_field.ui"), self)
         if not import_and_export_buttons:
             self.class_export_files.deleteLater()
@@ -92,6 +95,7 @@ class ClassFieldWidget(QWidget):
         self.class_checkbox.setChecked(enabled)
         if class_name:
             self.class_name.setText(class_name)
+        self.name_enabled = name_enabled
         self.show_class()
 
 
@@ -100,7 +104,7 @@ class ClassFieldWidget(QWidget):
             enabled = self.class_checkbox.isChecked()
         else:
             self.class_checkbox.setChecked(enabled)
-        self.class_name.setEnabled(enabled)
+        self.class_name.setEnabled(self.name_enabled)
         self.class_add_object.setEnabled(enabled)
         for object in self.objects_widgets:
             object.setEnabled(enabled)
@@ -114,23 +118,23 @@ class ClassFieldWidget(QWidget):
         self.deleteLater()
 
 
-    def add_object(self, object_name: str = None, object_image: str = None,
-                   click_image: Callable=None) -> ObjectCardWidget:
+    def add_object(self, object_name: str=None, object_image: str | np.ndarray=None,
+                   name_enabled: bool=True, click_image: Callable=None) -> ObjectCardWidget:
         object_card = ObjectCardWidget()
-        object_card.initUI(object_name=object_name, object_image=object_image, click_image=click_image)
+        object_card.initUI(object_name, object_image, name_enabled, click_image)
         object_card.object_delete.clicked.connect(
             lambda: (self.delete_object(object_card), self.update_layout()))
         self.objects_widgets.append(object_card)
         return object_card
 
 
-    def delete_object(self, object_widget: ObjectCardWidget):
+    def delete_object(self, object_widget: ObjectCardWidget, user_call: bool=False):
         if object_widget in self.objects_widgets:
             self.objects_widgets.remove(object_widget)
             object_widget.delete_object()
 
 
-    def get_object(self, object_name: str = None) -> bool | ObjectCardWidget:
+    def get_object(self, object_name: str=None) -> bool | ObjectCardWidget:
         for object in self.objects_widgets:
             if object.object_name.text()==object_name:
                 return object
@@ -161,6 +165,70 @@ class ClassFieldWidget(QWidget):
 
 
 
+class OverviewClassWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.fields_list: list[ClassFieldWidget] = []
+
+    def initUI(self, class_name: str=None):
+        uic.loadUi(os.path.join(uis_path, "widgets", "overview_class.ui"), self)
+        if class_name:
+            self.overview_group.setTitle(class_name)
+
+
+    def add_field(self, field_widget: ClassFieldWidget, field_name: str):
+        self.overview_vertical_layout.addWidget(field_widget)
+        self.fields_list.append(field_widget)
+        self.tab_bar.addTab(field_name)
+
+    def remove_field(self, field_widget: ClassFieldWidget):
+        if field_widget in self.fields_list:
+            for i in range(self.tab_bar.count()):
+                if self.tab_bar.tabText(i)==field_widget.class_name.text():
+                    self.tab_bar.removeTab(i)
+                    break
+            self.fields_list.remove(field_widget)
+            if self.overview_vertical_layout:
+                self.overview_vertical_layout.removeWidget(field_widget)
+
+    def get_field_index(self, field_widget: ClassFieldWidget) -> int:
+        if field_widget in self.fields_list:
+            return self.fields_list.index(field_widget)
+        return -1
+
+    def get_field_by_name(self, field_name: str) -> ClassFieldWidget | bool:
+        for field_widget in self.fields_list:
+            if field_widget.class_name.text()==field_name:
+                return field_widget
+        return False
+
+    def get_field_at_index(self, index: int) -> ClassFieldWidget | None:
+        if 0<=index<len(self.fields_list):
+            return self.fields_list[index]
+        return None
+
+    def scroll_to_field(self, index: int):
+        def _scroll_to_widget(widget, scroll_area):
+            pos_in_contents = widget.mapTo(scroll_area.widget(), widget.rect().topLeft())
+            scroll_area.verticalScrollBar().setValue(pos_in_contents.y()-5)
+        if 0<=index<len(self.fields_list):
+            QTimer.singleShot(0, lambda: _scroll_to_widget(
+                self.fields_list[index], self.overview_scroll_area))
+
+    def clear_fields(self):
+        for field_widget in self.fields_list[:]:
+            self.remove_field(field_widget)
+            field_widget.deleteLater()
+        self.fields_list.clear()
+        while self.tab_bar.count()>0:
+            self.tab_bar.removeTab(0)
+
+    def update_all_fields_layouts(self):
+        for field_widget in self.fields_list:
+            field_widget.update_layout()
+
+
+
 class MainWindowUI(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -181,7 +249,7 @@ class MainWindowUI(QMainWindow):
         self.project_resize_timer.setSingleShot(True)
         self.project_resize_timer.timeout.connect(self.project_update_all_class_layouts)
 
-    def project_add_class(self, class_name: str = None, enabled: bool = True) -> ClassFieldWidget:
+    def project_add_class(self, class_name: str=None, enabled: bool=True) -> ClassFieldWidget:
         class_widget = ClassFieldWidget()
         class_widget.initUI(class_name, enabled, False)
         self.project_tab.classes_vertical_layout.addWidget(class_widget)
@@ -211,7 +279,7 @@ class MainWindowUI(QMainWindow):
         self.dataset_tab.tab_bar.currentChanged.connect(self.dataset_on_tab_changed)
 
     def dataset_on_tab_changed(self, index):
-        if index >= 0:
+        if index>=0:
             class_name = self.dataset_tab.tab_bar.tabText(index)
             if class_name in self.dataset_tab.classes_tabs:
                 for widget in self.dataset_tab.classes_tabs.values():
@@ -219,19 +287,17 @@ class MainWindowUI(QMainWindow):
                 selected_widget = self.dataset_tab.classes_tabs[class_name]
                 selected_widget.show()
                 layout = self.dataset_tab.content_widget.layout()
-                if selected_widget.parent() != self.dataset_tab.content_widget:
+                if selected_widget.parent()!=self.dataset_tab.content_widget:
                     layout.addWidget(selected_widget)
-                for field_widget in selected_widget.fields_list:
-                    field_widget.update_layout()
+                selected_widget.update_all_fields_layouts()
 
-    def dataset_add_class(self, class_name: str = None) -> QWidget:
-        overview_widget = uic.loadUi(os.path.join(uis_path, "widgets", "overview_class.ui"))
-        overview_widget.overview_group.setTitle(class_name)
+    def dataset_add_class(self, class_name: str=None) -> OverviewClassWidget:
+        overview_widget = OverviewClassWidget()
+        overview_widget.initUI(class_name)
         overview_widget.tab_bar.currentChanged.connect(
             lambda i, ow=overview_widget: self.dataset_scroll_to_class_field(ow, i))
         self.dataset_tab.classes_tabs[class_name] = overview_widget
-        self.dataset_tab.classes_tabs[class_name].fields_list = []
-        if self.dataset_tab.tab_bar.count() == 0:
+        if self.dataset_tab.tab_bar.count()==0:
             self.dataset_tab.content_widget.layout().addWidget(overview_widget)
             overview_widget.show()
         else:
@@ -239,17 +305,17 @@ class MainWindowUI(QMainWindow):
         self.dataset_tab.tab_bar.addTab(class_name)
         return overview_widget
 
-    def dataset_delete_class(self, overview_widget: QWidget, user_call: bool=True) -> bool:
+    def dataset_delete_class(self, overview_widget: OverviewClassWidget, user_call: bool=True) -> bool:
         if user_call:
             reply = QMessageBox.question(
                 self, "Удаление класса",
                 "Вы точно хотите удалить класс? Все изображения которые относились к нему также будут удалены.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
-        if (not user_call) or reply == QMessageBox.StandardButton.Yes:
+        if (not user_call) or reply==QMessageBox.StandardButton.Yes:
             class_name_to_remove = self.get_overview_class_name_in_dataset(overview_widget)
             if class_name_to_remove:
                 for i in range(self.dataset_tab.tab_bar.count()):
-                    if self.dataset_tab.tab_bar.tabText(i) == class_name_to_remove:
+                    if self.dataset_tab.tab_bar.tabText(i)==class_name_to_remove:
                         self.dataset_tab.tab_bar.removeTab(i)
                         break
                 self.dataset_tab.content_widget.layout().removeWidget(overview_widget)
@@ -258,15 +324,13 @@ class MainWindowUI(QMainWindow):
                 return True
         return False
 
-    def dataset_add_class_field(self, class_name: str, field_name: str, enabled: bool = True) -> ClassFieldWidget:
+    def dataset_add_class_field(self, class_name: str, field_name: str, enabled: bool=True) -> ClassFieldWidget:
         field_widget = ClassFieldWidget()
-        field_widget.initUI(field_name, enabled)
+        field_widget.initUI(field_name, enabled, True, False)
         field_widget.class_delete.clicked.disconnect()
         field_widget.class_delete.clicked.connect(
             lambda: self.dataset_delete_class_field_widget(field_widget))
-        self.dataset_tab.classes_tabs[class_name].overview_vertical_layout.addWidget(field_widget)
-        self.dataset_tab.classes_tabs[class_name].fields_list.append(field_widget)
-        self.dataset_tab.classes_tabs[class_name].tab_bar.addTab(field_name)
+        self.dataset_tab.classes_tabs[class_name].add_field(field_widget, field_name)
         return field_widget
 
     def dataset_delete_class_field_widget(self, field_widget: ClassFieldWidget, user_call: bool=True) -> bool:
@@ -282,46 +346,28 @@ class MainWindowUI(QMainWindow):
                     class_widget = widget
                     break
             if class_widget:
-                for i in range(class_widget.tab_bar.count()):
-                    if class_widget.tab_bar.tabText(i) == field_widget.class_name.text():
-                        class_widget.tab_bar.removeTab(i)
-                        break
-                class_widget.fields_list.remove(field_widget)
-                if class_widget.overview_vertical_layout:
-                    class_widget.overview_vertical_layout.removeWidget(field_widget)
+                class_widget.remove_field(field_widget)
                 field_widget.deleteLater()
             return True
-        else:
-            return False
-
-    def get_class_field_in_dataset(self, class_name: str, field_name: str) -> bool | QWidget:
-        class_tab = self.dataset_tab.classes_tabs.get(class_name)
-        if class_tab:
-            for field_widget in class_tab.fields_list:
-                if field_widget.class_name.text()==field_name:
-                    return field_widget
         return False
 
-    def dataset_scroll_to_class_field(self, overview_widget, index):
-        def _scroll_to_widget(widget, scroll_area):
-            pos_in_contents = widget.mapTo(scroll_area.widget(), widget.rect().topLeft())
-            scroll_area.verticalScrollBar().setValue(pos_in_contents.y() - 5)
-        if 0 <= index < len(overview_widget.fields_list):
-            QTimer.singleShot(0, lambda: _scroll_to_widget(
-                overview_widget.fields_list[index], overview_widget.overview_scroll_area))
+    def get_class_field_in_dataset(self, class_name: str, field_name: str) -> bool | ClassFieldWidget:
+        class_tab = self.dataset_tab.classes_tabs.get(class_name)
+        if class_tab:
+            return class_tab.get_field_by_name(field_name)
+        return False
 
-    def get_overview_class_name_in_dataset(self, overview_class_widget: QWidget) -> bool | str:
-        class_name = False
+    def dataset_scroll_to_class_field(self, overview_widget: OverviewClassWidget, index: int):
+        overview_widget.scroll_to_field(index)
+
+    def get_overview_class_name_in_dataset(self, overview_class_widget: OverviewClassWidget) -> bool | str:
         for cur_class_name, widget in self.dataset_tab.classes_tabs.items():
-            if widget == overview_class_widget:
-                class_name = cur_class_name
-                break
-        return class_name
+            if widget==overview_class_widget:
+                return cur_class_name
 
     def dataset_update_all_class_layouts(self):
-        for class_name, class_overview in self.dataset_tab.classes_tabs.items():
-            for field_widget in class_overview.fields_list:
-                field_widget.update_layout()
+        for class_overview in self.dataset_tab.classes_tabs.values():
+            class_overview.update_all_fields_layouts()
 
 
     def autodataset_initUI(self):

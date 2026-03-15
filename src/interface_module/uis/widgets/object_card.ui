@@ -55,6 +55,7 @@ QLineEdit {
     font-size: 13px;
     margin-left: 5px;
 }
+QLineEdit:disabled { color: #b6b6b6; }
         </string>
        </property>
        <property name="minimumSize">
