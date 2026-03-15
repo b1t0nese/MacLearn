@@ -303,7 +303,7 @@ class AutoDataset(QObject):
         self.all_images_count = len(all_images)
         for i, image_data in enumerate(all_images):
             image_path = self.project_manager.get_full_path("images", image_data["filename"])
-            image = cv2.cvtColor(open_image(image_path), cv2.COLOR_BGR2RGB)
+            image, new_img_data = open_image(image_path), None
             if not image_data["annotation"] and self._is_running:
                 if image is not None and image.size > 0:
                     object_detector = ImageAnnotationDetector(image)
@@ -314,10 +314,14 @@ class AutoDataset(QObject):
                     annotation_data = object_detector.calculate_bboxes_data()
                     if annotation_data:
                         bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
-                        image_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
+                        new_img_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
                     image = object_detector.put_contours_on_image(image)
+            elif self._is_running:
+                image = visualize_bbox(image, image_data["annotation"])
+            else:
+                break
             self.update_information(
-                (f"Аннотация №{i+1} {"уже создана" if image_data["annotation"] else "создана"}, данные изображения: {image_data}", 0),
+                (f"Аннотация №{i+1} {"уже создана" if image_data["annotation"] else "создана"}, данные изображения: {new_img_data or image_data}", 0),
                 stage_updated=("Create annotation", (self.created_annotations_count, self.all_images_count)), cur_image=(image_path, image))
             self.created_annotations_count += 1
         self.update_information(('Готово! Аннотация создана.\n', 2))

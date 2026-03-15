@@ -2,15 +2,14 @@ import cv2
 from cv2.typing import MatLike
 import numpy as np
 import rembg
-import random
 
 
 
-def open_image(file_path: str) -> MatLike:
+def open_image(file_path: str, color=cv2.COLOR_BGR2RGB) -> MatLike:
     with open(file_path, 'rb') as f:
         img_array = np.frombuffer(f.read(), dtype=np.uint8)
         image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-    return image
+    return cv2.cvtColor(image, color)
 
 
 def resize_image(img: MatLike, target_size: tuple=(300, 300)) -> MatLike:
@@ -21,51 +20,36 @@ def resize_image(img: MatLike, target_size: tuple=(300, 300)) -> MatLike:
     return resized_img
 
 
-def distort_image(img: MatLike, distortion_type=None, fill_color=None) -> MatLike:
-    if distortion_type is None:
-        distortion_type = random.choice(["blur", "noise", "rotation", "perspective"])
-    if fill_color is None:
-        fill_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-
-    if distortion_type == "blur":
-        blur_amount = random.randint(3, 15)
-        if blur_amount % 2 == 0:
-            blur_amount += 1
-        distorted_img = cv2.GaussianBlur(img, (blur_amount, blur_amount), 0)
-    elif distortion_type == "noise":
-        row, col, ch = img.shape
-        noise_level = random.randint(0, 10)
-        gauss = np.random.normal(0, noise_level, (row, col, ch)).astype('uint8')
-        distorted_img = cv2.add(img, gauss)
-    elif distortion_type == "rotation":
-        angle = random.randint(-30, 30)
-        height, width = img.shape[:2]
-        center = (width // 2, height // 2)
-        rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-        distorted_img = cv2.warpAffine(img, rotation_matrix, (width, height), borderValue=fill_color)
-    elif distortion_type == "perspective":
-        height, width = img.shape[:2]
-        max_offset = min(width, height) // 4
-        pts1 = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
-        offset1 = (random.randint(0, max_offset), random.randint(0, max_offset))
-        offset2 = (width - random.randint(0, max_offset), random.randint(0, max_offset))
-        offset3 = (random.randint(0, max_offset), height - random.randint(0, max_offset))
-        offset4 = (width - random.randint(0, max_offset), height - random.randint(0, max_offset))
-        pts2 = np.float32([offset1, offset2, offset3, offset4])
-        matrix = cv2.getPerspectiveTransform(pts1, pts2)
-        distorted_img = cv2.warpPerspective(img, matrix, (width, height), borderMode=cv2.BORDER_CONSTANT, borderValue=fill_color)
+def visualize_bbox(img: MatLike, bboxes: list[list[int]], classes_colors: list[tuple[int]] = None) -> MatLike:
+    result = img.copy()
+    if classes_colors is None:
+        unique_classes = sorted(set(bbox[0] for bbox in bboxes))
+        classes_colors = {}
+        for i, class_id in enumerate(unique_classes):
+            color = cv2.cvtColor(np.uint8([[[(i*30)%180, 255, 255]]]), cv2.COLOR_HSV2BGR)[0][0]
+            classes_colors[class_id] = (int(color[0]), int(color[1]), int(color[2]))
     else:
-        distorted_img = None
-
-    return distorted_img
+        classes_colors_dict = {}
+        for i, class_id in enumerate(sorted(set(bbox[0] for bbox in bboxes))):
+            if i<len(classes_colors):
+                classes_colors_dict[class_id] = classes_colors[i]
+            else:
+                classes_colors_dict[class_id] = classes_colors[i % len(classes_colors)]
+        classes_colors = classes_colors_dict
+    for bbox in bboxes:
+        class_id, x, y, w, h = bbox
+        cv2.rectangle(result, (x, y), (x + w, y + h), classes_colors[class_id], 2)
+        label_size, _ = cv2.getTextSize(str(class_id), cv2.FONT_HERSHEY_SIMPLEX, 1, 2)
+        cv2.rectangle(result, (x, y - label_size[1] - 5), (x + label_size[0] + 5, y),  classes_colors[class_id], -1)
+        cv2.putText(result, str(class_id), (x + 2, y - 2), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
+    return result
 
 
 
 class ImageAnnotation:
     def formate_bbox(bbox: tuple[int], img_size: tuple[int]=None,
                      new_img_size: tuple[int]=None, ann_type: str=None) -> str:
-        """
-        Formate bbox for new image or other annotation type
+        """Formate bbox for new image or other annotation type
 
         :param bbox: bounding box data of the type (x, y, w, h)
         :type bbox: tuple[int]
@@ -76,7 +60,7 @@ class ImageAnnotation:
         :param ann_type: the name of the annotation type used, available: "YOLO", "COCO", "PASCAL_VOC", None (default bbox)
         :type ann_type: str = None
         :return: formatted annotation as string
-        """
+        """ # это всего лишь тест аннотаций кода, которые я буду делать в будущем для волонтёров-разработчиков
         x, y, w, h = bbox
         target_size = new_img_size if new_img_size else img_size
 
