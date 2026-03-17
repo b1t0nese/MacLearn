@@ -11,10 +11,16 @@
 
 ## 🖼️ Скриншоты
 
-| Главное окно | Настройка классов | Автоматический сбор |
-|:---:|:---:|:---:|
-| ![Главное окно](https://github.com/b1t0nese/MacLearn/blob/main/doc/images/project_tab.png?raw=true) | ![Настройка классов](https://github.com/b1t0nese/MacLearn/blob/main/doc/images/dataset_tab.png?raw=true) | ![Автодатасет](https://github.com/b1t0nese/MacLearn/blob/main/doc/images/autodataset_tab_in_work.png?raw=true) |
-*Интерфейс программы в действии — всё нужное под рукой*
+### Главное окно
+![Главное окно](https://github.com/b1t0nese/MacLearn/blob/main/doc/images/project_tab.png?raw=true)
+
+### Настройка классов
+![Настройка классов](https://github.com/b1t0nese/MacLearn/blob/main/doc/images/dataset_tab.png?raw=true)
+
+### Автоматический сбор
+![Автодатасет](https://github.com/b1t0nese/MacLearn/blob/main/doc/images/autodataset_tab_in_work.gif?raw=true)
+
+#### *Интерфейс программы в действии — всё нужное под рукой*
 
 ---
 
