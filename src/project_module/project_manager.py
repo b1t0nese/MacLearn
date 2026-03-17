@@ -107,27 +107,19 @@ class Dataset:
             return conf
 
 
-    def add_or_upd_class_conf(self, class_id: int=None, class_name: str=None, enabled: bool = True,
-                              subclasses: list = []) -> int | bool:
+    def add_or_upd_class_conf(self, class_name: str, class_id: int=None,
+                              enabled: bool = True, subclasses: list = []):
         with self.get_connection() as con:
             cur = con.cursor()
-            if not class_id:
-                class_id, class_name = cur.execute("SELECT id, class_name FROM classes_conf WHERE class_name = ?",
-                                                   (class_name,)).fetchone()
-            elif not class_name:
-                class_id, class_name = cur.execute("SELECT id, class_name FROM classes_conf WHERE class_name = ?",
-                                                   (class_name,)).fetchone()
-            if class_id:
+            result = cur.execute("SELECT id FROM classes_conf WHERE class_name = ?", (
+                class_name,)).fetchone() if not class_id else [class_id]
+            if result:
                 cur.execute("UPDATE classes_conf SET class_name = ?, enabled = ?, subclasses = ? "+\
-                            "WHERE id = ?""", (class_name, enabled, json.dumps(subclasses, ensure_ascii=False), class_id))
-            elif class_name:
+                            "WHERE id = ?""", (class_name, enabled, json.dumps(subclasses, ensure_ascii=False), result[0]))
+            else:
                 cur.execute("INSERT INTO classes_conf (class_name, enabled, subclasses) "+\
                             "VALUES (?, ?, ?)", (class_name, enabled, json.dumps(subclasses, ensure_ascii=False)))
-                class_id = cur.lastrowid
-            else:
-                return
             con.commit()
-            return class_id
 
     def del_class_conf(self, class_id: int = None, class_name: str = None) -> bool:
         with self.get_connection() as con:
@@ -159,7 +151,7 @@ class Dataset:
         with self.get_connection() as con:
             cur = con.cursor()
             classes_ids = cur.execute(f"SELECT id FROM classes_conf{\
-                " WHERE enabled=?" if enabled is not None else ""}",
+                " WHERE enabled=?" if enabled is not None else ""} ORDER BY id",
                 (enabled,) if enabled is not None else ()).fetchall()
             result = []
             for class_id in classes_ids:
@@ -335,7 +327,7 @@ class Project(Dataset):
         self.add_skipped_paths()
         self.set_configutation(configuration)
         for class_data in self.get_all_classes_conf():
-            if class_data["id"] not in [clasdat["class_id"] for clasdat in classes_conf]:
+            if class_data["id"] is not None and class_data["id"] not in [clasdat["class_id"] for clasdat in classes_conf]:
                 self.del_class_conf(class_data["id"])
                 for image in self.get_images(class_data["id"]):
                     self.del_image(image["id"])

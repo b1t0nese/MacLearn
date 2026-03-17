@@ -74,9 +74,7 @@ QPushButton:hover {
     background-color: palette(dark);
     border-color: palette(highlight);
 }
-QPushButton:pressed {
-    background-color: palette(shadow);
-}
+QPushButton:pressed { background-color: palette(shadow); }
         </string>
        </property>
        <property name="text">
@@ -99,9 +97,7 @@ QPushButton:hover {
     background-color: palette(dark);
     border-color: palette(highlight);
 }
-QPushButton:pressed {
-    background-color: palette(shadow);
-}
+QPushButton:pressed { background-color: palette(shadow); }
         </string>
        </property>
        <property name="text">
@@ -124,9 +120,7 @@ QPushButton:hover {
     background-color: palette(dark);
     border-color: palette(highlight);
 }
-QPushButton:pressed {
-    background-color: palette(shadow);
-}
+QPushButton:pressed { background-color: palette(shadow); }
         </string>
        </property>
        <property name="text">

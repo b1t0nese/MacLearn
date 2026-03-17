@@ -15,9 +15,7 @@
    </size>
   </property>
   <property name="styleSheet">
-   <string notr="true">
-QWidget {padding: 2px;}
-   </string>
+   <string notr="true">padding: 2px;</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_5">
    <item>
@@ -31,9 +29,7 @@ QLabel {
     border: 2px solid #ccc;
     background-color: palette(alternate-base);
 }
-QLabel:hover {
-    border-color: palette(highlight);
-}
+QLabel:hover { border-color: palette(highlight); }
        </string>
       </property>
       <property name="text">
@@ -50,11 +46,7 @@ QLabel:hover {
       <widget class="QLineEdit" name="object_name">
        <property name="styleSheet">
         <string notr="true">
-QLineEdit {
-    font-weight: bold;
-    font-size: 13px;
-    margin-left: 5px;
-}
+QLineEdit { font-weight: bold; font-size: 13px; }
 QLineEdit:disabled { color: #b6b6b6; }
         </string>
        </property>
@@ -93,9 +85,7 @@ QPushButton:hover {
     background-color: palette(dark);
     border-color: palette(highlight);
 }
-QPushButton:pressed {
-    background-color: palette(shadow);
-}
+QPushButton:pressed { background-color: palette(shadow); }
         </string>
        </property>
        <property name="maximumSize">

@@ -72,7 +72,7 @@
    <item>
     <widget class="QGroupBox" name="overview_group">
      <property name="styleSheet">
-      <string notr="true">QGroupBox { font-size: 14px; font-weight: bold; }</string>
+      <string notr="true">font-size: 14px; font-weight: bold;</string>
      </property>
      <property name="title">
       <string>Содержимое</string>

@@ -19,46 +19,27 @@ from project_module.photoshop import visualize_bbox, open_image
 class App:
     def __init__(self, **config):
         self.config = config
-        self.autodataset_worker = None
-        self.autodataset_thread = None
-        self.appApplication = None
-        self.windowUI = None
+        self.autodataset_worker: AutoDataset = None
+        self.autodataset_thread: QThread = None
+        self.appApplication: QApplication = None
+        self.windowUI: MainWindowUI = None
         self.open_project(self.config["project_path"])
 
 
-    def new_window(self, project_path: str):
+    def start(self, app: QApplication):
+        exit_code = -1
         try:
-            if self.autodataset_worker:
-                try:
-                    self.delete_autodataset_thread()
-                    self.autodataset_worker.close()
-                except: pass
-                self.autodataset_worker.deleteLater()
-                self.autodataset_worker = None
-            self.project_data = Project(project_path)
-            self.autodataset_worker = AutoDataset(
-                self.project_data, self.config["chromedriver_path"], self.config["chrome_version"])
-            self.windowUI.initUI()
-            self.init_config_window()
-            self.init_project_conf_in_window()
-            self.update_dataset_view_in_window()
-            if self.autodataset_worker.driver:
-                self.windowUI.add_another_program_to_autodataset("chrome.exe")
-            self.windowUI.update_autodataset_statuses()
-            self.windowUI.show()
+            self.appApplication = app
+            self.appApplication.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt6'))
+            exit_code = self.appApplication.exec()
         except Exception as e:
             QMessageBox.warning(
                 self.windowUI, "Critical error",
                 str(e), QMessageBox.StandardButton.Ok)
-            self.close_application()
+            self.close_application(exit_code)
             raise e
 
-    def start(self, app: QApplication):
-        self.appApplication = app
-        self.appApplication.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt6'))
-        sys.exit(self.appApplication.exec())
-
-    def close_application(self, event=None):
+    def close_application(self, event=None, exit_code: int=0):
         if self.autodataset_worker:
             self.delete_autodataset_thread()
             self.autodataset_worker.close()
@@ -70,6 +51,28 @@ class App:
                 self.windowUI.original_close_event(event)
             else:
                 event.accept()
+        sys.exit(exit_code)
+
+
+    def new_window(self, project_path: str):
+        if self.autodataset_worker:
+            try:
+                self.delete_autodataset_thread()
+                self.autodataset_worker.close()
+            except: pass
+            self.autodataset_worker.deleteLater()
+            self.autodataset_worker = None
+        self.project_data = Project(project_path)
+        self.autodataset_worker = AutoDataset(
+            self.project_data, self.config["chromedriver_path"], self.config["chrome_version"])
+        self.windowUI.initUI()
+        self.init_config_window()
+        self.init_project_conf_in_window()
+        self.update_dataset_view_in_window()
+        if self.autodataset_worker.driver:
+            self.windowUI.add_another_program_to_autodataset("chrome.exe")
+        self.windowUI.autodataset_update_statuses()
+        self.windowUI.show()
 
 
     def init_config_window(self):
@@ -88,8 +91,6 @@ class App:
         self.windowUI.actionRestart.triggered.connect(lambda e: self.open_project(self.project_data.project_path))
         self.windowUI.actionExit.triggered.connect(self.close_application)
         self.windowUI.actionOpenAbout.triggered.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/b1t0nese/MacLearn")))
-        # self.windowUI.original_close_event = self.windowUI.closeEvent
-        # self.windowUI.closeEvent = self.close_application.__get__(self, type(self.windowUI))
 
     def init_project_conf_in_window(self):
         project_conf = self.project_data.get_project_conf()
@@ -116,38 +117,38 @@ class App:
                 class_overview = self.windowUI.dataset_add_class(clas["class_name"])
             search_text = class_overview.lineEdit_search.text()
             for images_type in ["default", "augment", "validation"]:
-                type_field = self.windowUI.get_class_field_in_dataset(clas["class_name"], images_type)
-                if not type_field:
-                    type_field = self.windowUI.dataset_add_class_field(clas["class_name"], images_type)
-                    type_field.class_import_files.clicked.connect(
+                field = self.windowUI.get_class_field_in_dataset(clas["class_name"], images_type)
+                if not field:
+                    field = self.windowUI.dataset_add_class_field(clas["class_name"], images_type)
+                    field.class_import_files.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_images_to_class(c_id, it))
-                    type_field.class_export_files.clicked.connect(
+                    field.class_export_files.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.export_images_from_class(c_id, it))
-                    type_field.class_delete_command = lambda e=None, c_id=clas["id"], cw=type_field, it=images_type, uc=True: [
+                    field.class_delete_command = lambda e=None, c_id=clas["id"], cw=field, it=images_type, uc=True: [
                         self.project_data.del_image(img["id"]) for img in self.project_data.get_images(c_id, it)]\
                             if self.windowUI.dataset_delete_class_field_widget(cw, uc) else None
-                    type_field.class_delete.clicked.disconnect(); type_field.class_delete.clicked.connect(type_field.class_delete_command)
-                    type_field.class_add_object.clicked.disconnect(); type_field.class_add_object.clicked.connect(
+                    field.class_delete.clicked.disconnect(); field.class_delete.clicked.connect(field.class_delete_command)
+                    field.class_add_object.clicked.disconnect(); field.class_add_object.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_image_to_class(c_id, it))
                 for image in self.project_data.get_images(clas["id"], images_type):
-                    object_widget = type_field.get_object(image["filename"])
+                    object_widget = field.get_object(image["filename"])
                     if (not search_text or search_text in image["filename"]) and not object_widget:
                         image_data = self.project_data.get_full_path("images", image["filename"])
                         if image["annotation"]:
                             image_data = visualize_bbox(open_image(image_data), image["annotation"])
-                        object_widget = type_field.add_object(image["filename"], image_data, False, lambda e: None)
+                        object_widget = field.add_object(image["filename"], image_data, False, lambda e: None)
                         object_widget.object_delete.clicked.disconnect(); object_widget.object_delete.clicked.connect(
-                            lambda e, img_id=image["id"], tf=type_field, ow=object_widget: (
+                            lambda e, img_id=image["id"], tf=field, ow=object_widget: (
                                 self.project_data.del_image(img_id), tf.delete_object(ow), tf.update_layout()))
                     elif object_widget and (search_text and not search_text in image["filename"]):
-                        type_field.delete_object(object_widget)
-                type_field.show_class(clas["enabled"])
+                        field.delete_object(object_widget)
+                field.show_class(clas["enabled"])
         self.windowUI.dataset_update_all_class_layouts()
         classes_names = map(lambda x: x["class_name"], classes)
         for class_name, class_overview in self.windowUI.dataset_tab.classes_tabs.copy().items():
             if not class_name in classes_names:
                 for field in class_overview.fields_list:
-                    field.class_delete_command(uc=False)
+                    self.windowUI.dataset_delete_class_field_widget(field, False)
                 self.windowUI.dataset_delete_class(class_overview, False)
 
 
@@ -248,9 +249,9 @@ class App:
             },
             "classes_conf": []
         }
-        for class_obj in self.windowUI.project_tab.class_objects:
+        for class_obj in self.windowUI.project_tab.project_overview.fields_list:
             local_class = {
-                "class_id": class_obj.class_data["id"],
+                "class_id": class_obj.class_data["id"] if hasattr(class_obj, "class_data") else None,
                 "class_name": class_obj.class_name.text(),
                 "enabled": class_obj.class_checkbox.isChecked(),
                 "subclasses": []
@@ -262,7 +263,7 @@ class App:
                 })
             local_project_conf["classes_conf"].append(local_class)
         self.project_data.save(**local_project_conf)
-        self.windowUI.update_autodataset_statuses()
+        self.windowUI.autodataset_update_statuses()
 
     def save_project_as(self):
         new_project_path = QFileDialog.getExistingDirectory(self.windowUI, "Выберите папку для сохранения")
@@ -329,7 +330,7 @@ class App:
         self.autodataset_worker.log_field.connect(self.windowUI.autodataset_log)
         self.autodataset_worker.cur_image_label.connect(self.windowUI.autodataset_set_image)
         self.autodataset_worker.stage_updated.connect(self.windowUI.update_autodataset_main_status)
-        self.autodataset_worker.subclass_updated.connect(self.windowUI.update_autodataset_object_status)
+        self.autodataset_worker.subclass_updated.connect(self.windowUI.autodataset_set_object_status)
 
         self.autodataset_thread.start()
         self.windowUI.set_btn_start_autodataset_state(True)
@@ -363,6 +364,8 @@ class App:
 
 
 def main():
+    global app, application
+
     arg_parser = argparse.ArgumentParser(
         "MacLearn", description="A program that will automatically assemble a "+
         "high-quality dataset of thousands of images for you in a matter of minutes.")
