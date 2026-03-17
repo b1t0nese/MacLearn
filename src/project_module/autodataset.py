@@ -110,18 +110,18 @@ class AutoDataset(QObject):
     log_field = pyqtSignal(str, int)
     cur_image_label = pyqtSignal(str, np.ndarray)
     stage_updated = pyqtSignal(str, tuple)
-    subclass_updated = pyqtSignal(str, int)
+    subclass_updated = pyqtSignal(str, int, str, int)
 
 
     def update_information(self, log_emit: tuple, subclass_updated: tuple=None,
                            stage_updated: tuple=None, cur_image: tuple=None):
-        try:
-            self.log_field.emit(*log_emit)
-            if subclass_updated: self.subclass_updated.emit(*subclass_updated)
-            if stage_updated: self.stage_updated.emit(*stage_updated)
-            if cur_image: self.cur_image_label.emit(*cur_image)
-        except:
-            print(f"{log_emit[1]*"\n"}{log_emit[0]}")
+        # try:
+        self.log_field.emit(*log_emit)
+        if subclass_updated: self.subclass_updated.emit(*subclass_updated)
+        if stage_updated: self.stage_updated.emit(*stage_updated)
+        if cur_image: self.cur_image_label.emit(*cur_image)
+        # except:
+        #     print(f"{log_emit[1]*"\n"}{log_emit[0]}")
 
 
     def __init__(self, project_manager: Project, chromedriver_path: str=None, chrome_version: int=None):
@@ -260,7 +260,7 @@ class AutoDataset(QObject):
                         image_id = img_id
                         self.downloaded_images_count += 1; downloaded_images_count += 1; self.update_information(
                             (f"Скачан файл {downloaded_images_count}/{images_count}, id: {image_id}", 0),
-                            (subclass_data["search_query"], downloaded_images_count),
+                            (subclass_data["search_query"], downloaded_images_count, "", 0),
                             ("Download images", (self.downloaded_images_count, self.all_images_count)),
                             (self.project_manager.get_full_path("images", self.project_manager.get_image(image_id)["filename"]), np.array([])))
                     Thread(target=self.download_image, args=(
@@ -289,7 +289,7 @@ class AutoDataset(QObject):
                     img_counts, val_img_counts = (img_counts if img_counts>0 else 0), (val_img_counts if val_img_counts>0 else 0)
                     all_imgs = def_count+def_val_count; self.downloaded_images_count += all_imgs; self.update_information(
                         (f'INFO: В классе "{subclass_data["search_query"]}" уже присутствует изображений: {all_imgs}.', 1),
-                        (subclass_data["search_query"], all_imgs), ("Download images", (self.downloaded_images_count, self.all_images_count)))
+                        (subclass_data["search_query"], all_imgs, "", 0), ("Download images", (self.downloaded_images_count, self.all_images_count)))
                     if (img_counts or val_img_counts) and all_imgs<must_img_counts+must_val_img_counts:
                         self.download_images(subclass_data, class_data["class_id"], must_img_counts, must_val_img_counts, all_imgs)
         self.update_information(('Готово! Изображения скачаны.\n', 2))
@@ -347,13 +347,19 @@ class AutoDataset(QObject):
         self.downloaded_images_count = 0
         self.created_annotations_count = 0
         self.processed_images_to_augment_count = 0
-        self.all_images_count = sum([int(self.project_data["configuration"]["images_per_class"] *
-                                         (1.2 if self.project_data["configuration"]["validation_data"] else 1))
-                                     for class_data in self.project_data["classes"] if class_data["enabled"]])
+        self.need_download_to_class = int(self.project_data["configuration"]["images_per_class"] *
+                                          (1.2 if self.project_data["configuration"]["validation_data"] else 1))
+        self.all_images_count = sum([
+            self.need_download_to_class for class_data in self.project_data["classes"] if class_data["enabled"]])
 
         if self.do_download_images and self.driver and self._is_running:
             self.update_information(("Подсчёт работы 1...\n", 1), stage_updated=(
                 "Download images", (self.downloaded_images_count, self.all_images_count)))
+            for class_data in self.project_data["classes"]:
+                if class_data["enabled"]:
+                    for subclass_data in class_data["subclasses"]:
+                        self.subclass_updated.emit(subclass_data["search_query"], 0, class_data["class_name"],
+                                                   round(self.need_download_to_class/len(class_data["subclasses"])))
         if self.project_data["configuration"]["annotation"] and self.do_annotation and self._is_running:
             self.update_information(("Подсчёт работы 2...\n", 0), stage_updated=(
                 "Create annotation", (self.created_annotations_count, self.all_images_count)))

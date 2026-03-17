@@ -22,7 +22,7 @@ def register_formatter(name):
 def export_image(first_path: str, dist_path: str, resize_size: tuple=None):
     if os.path.exists(dist_path):
         os.remove(dist_path)
-    image = open_image(first_path)
+    image = open_image(first_path, None)
     if resize_size:
         image = resize_image(image, resize_size)
     _, encoded_image = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 95])

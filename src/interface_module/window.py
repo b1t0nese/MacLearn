@@ -12,7 +12,6 @@ import os
 from .embedded_program_qt import EmbeddedProgramWidget
 
 
-
 if getattr(sys, 'frozen', False):
     base_path = sys._MEIPASS
 else:
@@ -98,7 +97,6 @@ class ClassFieldWidget(QWidget):
         self.name_enabled = name_enabled
         self.show_class()
 
-
     def show_class(self, enabled: bool=None):
         if enabled is None:
             enabled = self.class_checkbox.isChecked()
@@ -117,7 +115,6 @@ class ClassFieldWidget(QWidget):
         self.setParent(None)
         self.deleteLater()
 
-
     def add_object(self, object_name: str=None, object_image: str | np.ndarray=None,
                    name_enabled: bool=True, click_image: Callable=None) -> ObjectCardWidget:
         object_card = ObjectCardWidget()
@@ -127,12 +124,10 @@ class ClassFieldWidget(QWidget):
         self.objects_widgets.append(object_card)
         return object_card
 
-
     def delete_object(self, object_widget: ObjectCardWidget, user_call: bool=False):
         if object_widget in self.objects_widgets:
             self.objects_widgets.remove(object_widget)
             object_widget.delete_object()
-
 
     def get_object(self, object_name: str=None) -> bool | ObjectCardWidget:
         for object in self.objects_widgets:
@@ -174,6 +169,8 @@ class OverviewClassWidget(QWidget):
         uic.loadUi(os.path.join(uis_path, "widgets", "overview_class.ui"), self)
         if class_name:
             self.overview_group.setTitle(class_name)
+        self.tab_bar.currentChanged.connect(lambda i: self.scroll_to_field(i))
+        self.overview_scroll_area.verticalScrollBar().valueChanged.connect(self.update_tab_selection_from_scroll)
 
 
     def add_field(self, field_widget: ClassFieldWidget, field_name: str):
@@ -190,42 +187,44 @@ class OverviewClassWidget(QWidget):
             self.fields_list.remove(field_widget)
             if self.overview_vertical_layout:
                 self.overview_vertical_layout.removeWidget(field_widget)
+            field_widget.delete_class()
 
-    def get_field_index(self, field_widget: ClassFieldWidget) -> int:
-        if field_widget in self.fields_list:
-            return self.fields_list.index(field_widget)
-        return -1
+
+    def update_all_fields_layouts(self):
+        for field_widget in self.fields_list:
+            field_widget.update_layout()
+
+    def scroll_to_field(self, index: int):
+        def _scroll_to_widget(widget, scroll_area):
+            pos_in_contents = widget.mapTo(scroll_area.widget(), widget.rect().topLeft())
+            scroll_area.verticalScrollBar().setValue(pos_in_contents.y())
+        if 0<=index<len(self.fields_list):
+            QTimer.singleShot(0, lambda: _scroll_to_widget(
+                self.fields_list[index], self.overview_scroll_area))
+
+    def update_tab_selection_from_scroll(self):
+        scroll_pos = self.overview_scroll_area.verticalScrollBar().value()
+        viewport_height = self.overview_scroll_area.viewport().height()
+        best_index, best_visibility = -1, -1
+        for i, field_widget in enumerate(self.fields_list):
+            if not field_widget.isVisible():
+                continue
+            widget_y = field_widget.mapTo(self.overview_scroll_area.widget(), field_widget.rect().topLeft()).y()
+            visible_bottom = min(widget_y+field_widget.height(), scroll_pos+viewport_height)
+            visible_height = max(0, visible_bottom - max(widget_y, scroll_pos))
+            if visible_height>best_visibility:
+                best_visibility, best_index = visible_height, i
+        if best_index!=-1:
+            self.tab_bar.blockSignals(True)
+            self.tab_bar.setCurrentIndex(best_index)
+            self.tab_bar.blockSignals(False)
+
 
     def get_field_by_name(self, field_name: str) -> ClassFieldWidget | bool:
         for field_widget in self.fields_list:
             if field_widget.class_name.text()==field_name:
                 return field_widget
         return False
-
-    def get_field_at_index(self, index: int) -> ClassFieldWidget | None:
-        if 0<=index<len(self.fields_list):
-            return self.fields_list[index]
-        return None
-
-    def scroll_to_field(self, index: int):
-        def _scroll_to_widget(widget, scroll_area):
-            pos_in_contents = widget.mapTo(scroll_area.widget(), widget.rect().topLeft())
-            scroll_area.verticalScrollBar().setValue(pos_in_contents.y()-5)
-        if 0<=index<len(self.fields_list):
-            QTimer.singleShot(0, lambda: _scroll_to_widget(
-                self.fields_list[index], self.overview_scroll_area))
-
-    def clear_fields(self):
-        for field_widget in self.fields_list[:]:
-            self.remove_field(field_widget)
-            field_widget.deleteLater()
-        self.fields_list.clear()
-        while self.tab_bar.count()>0:
-            self.tab_bar.removeTab(0)
-
-    def update_all_fields_layouts(self):
-        for field_widget in self.fields_list:
-            field_widget.update_layout()
 
 
 
@@ -243,30 +242,22 @@ class MainWindowUI(QMainWindow):
     def project_initUI(self):
         self.project_tab = uic.loadUi(os.path.join(uis_path, "tabs", "project_tab.ui"))
         self.tabWidget.addTab(self.project_tab, "Проект")
+        self.project_tab.project_overview = OverviewClassWidget()
+        self.project_tab.project_overview.initUI("Классы объектов")
+        self.project_tab.verticalLayout_2.insertWidget(0, self.project_tab.project_overview)
         self.project_tab.btn_add_class.clicked.connect(self.project_add_class)
-        self.project_tab.class_objects = []
         self.project_resize_timer = QTimer()
         self.project_resize_timer.setSingleShot(True)
-        self.project_resize_timer.timeout.connect(self.project_update_all_class_layouts)
+        self.project_resize_timer.timeout.connect(self.project_tab.project_overview.update_all_fields_layouts)
 
-    def project_add_class(self, class_name: str=None, enabled: bool=True) -> ClassFieldWidget:
+    def project_add_class(self, class_name: str = None, enabled: bool = True) -> ClassFieldWidget:
+        class_name = class_name or f"Класс {len(self.project_tab.project_overview.fields_list) + 1}"
         class_widget = ClassFieldWidget()
         class_widget.initUI(class_name, enabled, False)
-        self.project_tab.classes_vertical_layout.addWidget(class_widget)
-        self.project_tab.class_objects.append(class_widget)
+        self.project_tab.project_overview.add_field(class_widget, class_name)
         class_widget.class_delete.clicked.connect(
-            lambda: self.project_delete_class(class_widget))
+            lambda: self.project_tab.project_overview.remove_field(class_widget))
         return class_widget
-
-    def project_delete_class(self, class_widget: ClassFieldWidget):
-        class_widget.delete_class()
-        self.project_tab.class_objects.remove(class_widget)
-
-    def project_update_all_class_layouts(self):
-        for i in range(self.project_tab.classes_vertical_layout.count()):
-            item = self.project_tab.classes_vertical_layout.itemAt(i)
-            if item and hasattr(item.widget(), 'objects_widgets'):
-                item.widget().update_layout()
 
 
     def dataset_initUI(self):
@@ -294,8 +285,6 @@ class MainWindowUI(QMainWindow):
     def dataset_add_class(self, class_name: str=None) -> OverviewClassWidget:
         overview_widget = OverviewClassWidget()
         overview_widget.initUI(class_name)
-        overview_widget.tab_bar.currentChanged.connect(
-            lambda i, ow=overview_widget: self.dataset_scroll_to_class_field(ow, i))
         self.dataset_tab.classes_tabs[class_name] = overview_widget
         if self.dataset_tab.tab_bar.count()==0:
             self.dataset_tab.content_widget.layout().addWidget(overview_widget)
@@ -357,9 +346,6 @@ class MainWindowUI(QMainWindow):
             return class_tab.get_field_by_name(field_name)
         return False
 
-    def dataset_scroll_to_class_field(self, overview_widget: OverviewClassWidget, index: int):
-        overview_widget.scroll_to_field(index)
-
     def get_overview_class_name_in_dataset(self, overview_class_widget: OverviewClassWidget) -> bool | str:
         for cur_class_name, widget in self.dataset_tab.classes_tabs.items():
             if widget==overview_class_widget:
@@ -378,14 +364,14 @@ class MainWindowUI(QMainWindow):
         self.autodataset_tab.tab_widget.addTab(self.autodataset_tab.work_tab, "Работа")
         self.autodataset_tab.layout().addWidget(self.autodataset_tab.tab_widget)
         self.tabWidget.addTab(self.autodataset_tab, "Автодатасет")
-        self.setup_autodataset_interface()
+        self.autodataset_setup_interface()
         self.setup_autodataset()
 
     def setup_autodataset(self):
         self.autodataset_classes_status = {}
         self.autodataset_main_status = {}
         self.autodataset_tab.work_tab.text_logs.clear()
-        self.update_autodataset_statuses()
+        self.autodataset_update_statuses()
         self.autodataset_update_progress(0)
 
     def set_btn_start_autodataset_state(self, started: bool=True):
@@ -415,7 +401,7 @@ class MainWindowUI(QMainWindow):
         self.autodataset_tab.program_tab.show()
         self.autodataset_tab.program_tab._showEvent()
 
-    def setup_autodataset_interface(self):
+    def autodataset_setup_interface(self):
         self.autodataset_tab.work_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.work_tab.verticalLayout_left, 25)
         self.autodataset_tab.work_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.work_tab.group_logs, 45)
         self.autodataset_tab.work_tab.horizontalLayout.setStretchFactor(self.autodataset_tab.work_tab.verticalLayout_right, 30)
@@ -427,34 +413,20 @@ class MainWindowUI(QMainWindow):
         header_stages.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header_stages.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
 
-    def update_autodataset_statuses(self):
-        self.update_autodataset_classes_status()
-        self.visualise_autodataset_classes_status()
+    def autodataset_update_statuses(self):
+        self.autodataset_visualise_classes_status()
         self.visualise_autodataset_main_status()
         self.autodataset_update_progress()
 
-    def update_autodataset_classes_status(self):
-        local_classes_status = {}    
-        for class_obj in self.project_tab.class_objects:
-            if class_obj.class_checkbox.isChecked():
-                for object in class_obj.objects_widgets:
-                    object_text = object.object_name.text()
-                    images_per_subclass = self.project_tab.spin_images_per_class.value()//len(class_obj.objects_widgets)
-                    images_per_subclass += images_per_subclass//5 if self.project_tab.cb_validation_data.isChecked() else 0
-                    object_data = {
-                        "example_image": object.object_image.my_image_path,
-                        "class": class_obj.class_name.text(),
-                        "status": (self.autodataset_classes_status[object_text]["status"][0]\
-                                   if object_text in self.autodataset_classes_status else 0, images_per_subclass)
-                    }
-                    local_classes_status[object_text] = object_data
-        self.autodataset_classes_status = local_classes_status.copy()
+    def autodataset_set_object_status(
+            self, object_name: str, status: int, object_class_name: str="No class", end_status: int=None):
+        if object_name not in self.autodataset_classes_status:
+            self.autodataset_classes_status[object_name] = {"class": object_class_name, "status": (0, 0)}
+        self.autodataset_classes_status[object_name]["status"] = (
+            status, end_status or self.autodataset_classes_status[object_name]["status"][1])
+        self.autodataset_visualise_classes_status()
 
-    def update_autodataset_object_status(self, object_name: str, status: int):
-        self.autodataset_classes_status[object_name]["status"] = (status, self.autodataset_classes_status[object_name]["status"][1])
-        self.visualise_autodataset_classes_status()
-
-    def visualise_autodataset_classes_status(self):
+    def autodataset_visualise_classes_status(self):
         self.autodataset_tab.work_tab.table_classes.setRowCount(len(self.autodataset_classes_status))
         self.autodataset_tab.work_tab.table_classes.setHorizontalHeaderLabels(["Класс", "Подкласс", "Статус"])
         for r, (object_text, object) in enumerate(self.autodataset_classes_status.items()):
@@ -464,7 +436,7 @@ class MainWindowUI(QMainWindow):
 
     def update_autodataset_main_status(self, name: str, progress: tuple | int=(0, 0)):
         self.autodataset_main_status[name] = progress if isinstance(progress, tuple) else (progress, self.autodataset_main_status.get(name)[1])
-        self.update_autodataset_statuses()
+        self.autodataset_update_statuses()
 
     def visualise_autodataset_main_status(self):
         self.autodataset_tab.work_tab.table_stages.setRowCount(len(self.autodataset_main_status))
@@ -501,6 +473,7 @@ class MainWindowUI(QMainWindow):
         ))
         self.autodataset_tab.work_tab.label_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.autodataset_tab.work_tab.label_image_path.setText(image_path)
+
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
