@@ -142,6 +142,7 @@ class AutoDataset(QObject):
 
         self.downloaded_images_count = 0
         self.created_annotations_count = 0
+        self.processed_images_to_augment_count = 0
 
         self.do_download_images = True
         self.do_annotation = True
@@ -334,40 +335,46 @@ class AutoDataset(QObject):
         }
 
 
-    @pyqtSlot()
-    def run(self):
-        self._is_running, self._image_downloaded = True, True
-        self.update_information(('Начало работы.\n', 0))
+    def update_all_information(self, clear: bool=False):
+        if not self._is_running:
+            self.update_project_data()
+            if clear:
+                self.downloaded_images_count = 0
+                self.created_annotations_count = 0
+                self.processed_images_to_augment_count = 0
+            else:
+                self.downloaded_images_count = 0 or self.downloaded_images_count
+                self.created_annotations_count = 0 or self.created_annotations_count
+                self.processed_images_to_augment_count = 0 or self.processed_images_to_augment_count
+            self.need_download_to_class = int(self.project_data["configuration"]["images_per_class"] *
+                                            (1.2 if self.project_data["configuration"]["validation_data"] else 1))
+            self.all_images_count = sum([
+                self.need_download_to_class for class_data in self.project_data["classes"] if class_data["enabled"]])
 
-        self.always_switch_to_main_window_thread = Thread(
-            target=self.always_switch_to_main_window, daemon=True)
-        self.always_switch_to_main_window_thread.start()
-
-        self.update_project_data()
-        self.downloaded_images_count = 0
-        self.created_annotations_count = 0
-        self.processed_images_to_augment_count = 0
-        self.need_download_to_class = int(self.project_data["configuration"]["images_per_class"] *
-                                          (1.2 if self.project_data["configuration"]["validation_data"] else 1))
-        self.all_images_count = sum([
-            self.need_download_to_class for class_data in self.project_data["classes"] if class_data["enabled"]])
-
-        if self.do_download_images and self.driver and self._is_running:
-            self.update_information(("Подсчёт работы 1...\n", 1), stage_updated=(
-                "Download images", (self.downloaded_images_count, self.all_images_count)))
+        if self.do_download_images and self.driver:
+            self.stage_updated.emit("Download images", (self.downloaded_images_count, self.all_images_count))
             for class_data in self.project_data["classes"]:
                 if class_data["enabled"]:
                     for subclass_data in class_data["subclasses"]:
                         self.subclass_updated.emit(subclass_data["search_query"], 0, class_data["class_name"],
                                                    round(self.need_download_to_class/len(class_data["subclasses"])))
-        if self.project_data["configuration"]["annotation"] and self.do_annotation and self._is_running:
-            self.update_information(("Подсчёт работы 2...\n", 0), stage_updated=(
-                "Create annotation", (self.created_annotations_count, self.all_images_count)))
-        if self.project_data["configuration"]["augmentation"] and self.do_augmentation and self._is_running:
-            self.update_information(("Подсчёт работы 3...\n", 0),  stage_updated=(
-                "Create augmentation data", (self.processed_images_to_augment_count, self.all_images_count)))
+        if self.project_data["configuration"]["annotation"] and self.do_annotation:
+            self.stage_updated.emit("Create annotation", (self.created_annotations_count, self.all_images_count))
+        if self.project_data["configuration"]["augmentation"] and self.do_augmentation:
+            self.stage_updated.emit("Create augmentation data", (self.processed_images_to_augment_count, self.all_images_count))
+
+
+    @pyqtSlot()
+    def run(self):
+        self.update_all_information(True)
+        self._is_running, self._image_downloaded = True, True
+        self.always_switch_to_main_window_thread = None
+        self.update_information(('Начало работы.\n', 2))
 
         if self.do_download_images and self.driver:
+            self.always_switch_to_main_window_thread = Thread(
+                target=self.always_switch_to_main_window, daemon=True)
+            self.always_switch_to_main_window_thread.start()
             self.download_images_data()
         else:
             self.update_information((f'''INFO: Установка изображений выключена{
@@ -387,7 +394,8 @@ class AutoDataset(QObject):
             self.update_information(('Работа окончена, данные готовы.\n\n\n', 2))
 
         self._is_running = False
-        self.always_switch_to_main_window_thread.join()
+        if self.always_switch_to_main_window_thread:
+            self.always_switch_to_main_window_thread.join()
         self.finished.emit()
 
 

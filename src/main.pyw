@@ -2,6 +2,7 @@ from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtCore import QThread, QUrl
 import qdarkstyle
+import subprocess
 import argparse
 import shutil
 import sys
@@ -13,6 +14,14 @@ from project_module.dataset_manager import AVAILABLE_FORMATS
 from interface_module.window import MainWindowUI
 from interface_module.logs_window import LogsUI
 from project_module.photoshop import visualize_bbox, open_image
+
+
+
+def launch_new_instance():
+    subprocess.Popen(
+        [sys.executable] + sys.argv if not getattr(sys, 'frozen', False) else [sys.argv[0]] + sys.argv[1:],
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS if sys.platform == 'win32' else 0,
+        stdin=None, stdout=None, stderr=None, close_fds=True)
 
 
 
@@ -82,6 +91,8 @@ class App:
         self.windowUI.dataset_tab.btn_update_dataset.clicked.connect(self.update_dataset_view_in_window)
         self.windowUI.dataset_tab.btn_export_dataset.clicked.connect(self.export_dataset_data)
         self.windowUI.autodataset_tab.work_tab.btn_start.clicked.connect(self.toggle_autodataset_work)
+        self.autodataset_worker_connect_signals(); at = self.windowUI.autodataset_tab; at.orgShowEvent = at.showEvent
+        at.showEvent = lambda e: [at.orgShowEvent(e), self.autodataset_worker.update_all_information()][0]
 
         self.windowUI.actionOpen.triggered.connect(self.open_project)
         self.windowUI.actionSave.triggered.connect(self.save_project)
@@ -89,6 +100,7 @@ class App:
         self.windowUI.actionExport.triggered.connect(lambda e: self.export_dataset_data(e, get_path=False))
         self.windowUI.actionExport_As.triggered.connect(self.export_dataset_data)
         self.windowUI.actionRestart.triggered.connect(lambda e: self.open_project(self.project_data.project_path))
+        self.windowUI.actionNewWindow.triggered.connect(launch_new_instance)
         self.windowUI.actionExit.triggered.connect(self.close_application)
         self.windowUI.actionOpenAbout.triggered.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/b1t0nese/MacLearn")))
 
@@ -115,7 +127,6 @@ class App:
             class_overview = self.windowUI.dataset_tab.classes_tabs.get(clas["class_name"])
             if not class_overview:
                 class_overview = self.windowUI.dataset_add_class(clas["class_name"])
-            search_text = class_overview.lineEdit_search.text()
             for images_type in ["default", "augment", "validation"]:
                 field = self.windowUI.get_class_field_in_dataset(clas["class_name"], images_type)
                 if not field:
@@ -132,7 +143,7 @@ class App:
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_image_to_class(c_id, it))
                 for image in self.project_data.get_images(clas["id"], images_type):
                     object_widget = field.get_object(image["filename"])
-                    if (not search_text or search_text in image["filename"]) and not object_widget:
+                    if not object_widget:
                         image_data = self.project_data.get_full_path("images", image["filename"])
                         if image["annotation"]:
                             image_data = visualize_bbox(open_image(image_data), image["annotation"])
@@ -140,14 +151,12 @@ class App:
                         object_widget.object_delete.clicked.disconnect(); object_widget.object_delete.clicked.connect(
                             lambda e, img_id=image["id"], tf=field, ow=object_widget: (
                                 self.project_data.del_image(img_id), tf.delete_object(ow), tf.update_layout()))
-                    elif object_widget and (search_text and not search_text in image["filename"]):
-                        field.delete_object(object_widget)
                 field.show_class(clas["enabled"])
         self.windowUI.dataset_update_all_class_layouts()
         classes_names = map(lambda x: x["class_name"], classes)
         for class_name, class_overview in self.windowUI.dataset_tab.classes_tabs.copy().items():
             if not class_name in classes_names:
-                for field in class_overview.fields_list:
+                for field in class_overview.fields:
                     self.windowUI.dataset_delete_class_field_widget(field, False)
                 self.windowUI.dataset_delete_class(class_overview, False)
 
@@ -249,14 +258,14 @@ class App:
             },
             "classes_conf": []
         }
-        for class_obj in self.windowUI.project_tab.project_overview.fields_list:
+        for class_obj in self.windowUI.project_tab.project_overview.fields:
             local_class = {
                 "class_id": class_obj.class_data["id"] if hasattr(class_obj, "class_data") else None,
                 "class_name": class_obj.class_name.text(),
                 "enabled": class_obj.class_checkbox.isChecked(),
                 "subclasses": []
             }
-            for object in class_obj.objects_widgets:
+            for object in class_obj.objects:
                 local_class["subclasses"].append({
                     "search_query": object.object_name.text(),
                     "example_image": object.object_image.my_image_path
@@ -323,7 +332,22 @@ class App:
         self.autodataset_thread.started.connect(self.autodataset_worker.run)
         self.autodataset_worker.finished.connect(self.autodataset_thread.quit)
         self.autodataset_thread.finished.connect(self.on_autodataset_finished)
+        self.autodataset_worker_connect_signals()
 
+        self.autodataset_thread.start()
+        self.windowUI.set_btn_start_autodataset_state(True)
+
+    def autodataset_worker_disconnect_signals(self):
+        try:
+            self.autodataset_worker.chrome_widget_lock.disconnect()
+            self.autodataset_worker.log_field.disconnect()
+            self.autodataset_worker.cur_image_label.disconnect()
+            self.autodataset_worker.stage_updated.disconnect()
+            self.autodataset_worker.subclass_updated.disconnect()
+        except: pass
+
+    def autodataset_worker_connect_signals(self):
+        self.autodataset_worker_disconnect_signals()
         if self.autodataset_worker.driver:
             self.autodataset_worker.chrome_widget_lock.connect(
                 lambda boolean: self.windowUI.autodataset_tab.program_tab.set_lock_resize(boolean))
@@ -332,20 +356,12 @@ class App:
         self.autodataset_worker.stage_updated.connect(self.windowUI.update_autodataset_main_status)
         self.autodataset_worker.subclass_updated.connect(self.windowUI.autodataset_set_object_status)
 
-        self.autodataset_thread.start()
-        self.windowUI.set_btn_start_autodataset_state(True)
-
     def delete_autodataset_thread(self):
         if self.autodataset_thread:
             try:
                 self.autodataset_thread.started.disconnect()
                 self.autodataset_worker.finished.disconnect()
                 self.autodataset_thread.finished.disconnect()
-                self.autodataset_worker.chrome_widget_lock.disconnect()
-                self.autodataset_worker.log_field.disconnect()
-                self.autodataset_worker.cur_image_label.disconnect()
-                self.autodataset_worker.stage_updated.disconnect()
-                self.autodataset_worker.subclass_updated.disconnect()
             except: pass
         if self.autodataset_worker.thread() != QThread.currentThread():
             self.autodataset_worker.moveToThread(QThread.currentThread())
