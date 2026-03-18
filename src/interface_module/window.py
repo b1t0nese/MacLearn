@@ -80,7 +80,7 @@ class ObjectCardWidget(QWidget):
 class ClassFieldWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self.objects_widgets = []
+        self.objects: list[ObjectCardWidget] = []
 
     def initUI(self, class_name: str=None, enabled: bool=True,
                import_and_export_buttons: bool=True, name_enabled: bool=True):
@@ -104,14 +104,14 @@ class ClassFieldWidget(QWidget):
             self.class_checkbox.setChecked(enabled)
         self.class_name.setEnabled(self.name_enabled)
         self.class_add_object.setEnabled(enabled)
-        for object in self.objects_widgets:
+        for object in self.objects:
             object.setEnabled(enabled)
 
 
     def delete_class(self):
-        for object in self.objects_widgets:
+        for object in self.objects:
             self.delete_object(object)
-        self.objects_widgets.clear()
+        self.objects.clear()
         self.setParent(None)
         self.deleteLater()
 
@@ -121,26 +121,29 @@ class ClassFieldWidget(QWidget):
         object_card.initUI(object_name, object_image, name_enabled, click_image)
         object_card.object_delete.clicked.connect(
             lambda: (self.delete_object(object_card), self.update_layout()))
-        self.objects_widgets.append(object_card)
+        self.objects.append(object_card)
         return object_card
 
     def delete_object(self, object_widget: ObjectCardWidget, user_call: bool=False):
-        if object_widget in self.objects_widgets:
-            self.objects_widgets.remove(object_widget)
+        if object_widget in self.objects:
+            self.objects.remove(object_widget)
             object_widget.delete_object()
 
     def get_object(self, object_name: str=None) -> bool | ObjectCardWidget:
-        for object in self.objects_widgets:
+        for object in self.objects:
             if object.object_name.text()==object_name:
                 return object
         return False
 
 
     def update_layout(self):
-        if self.width() <= 0 or not self.objects_widgets:
-            return
+        objects = list(filter(lambda o: o.isVisible(), self.objects))
+        if not objects:
+            if not self.objects:
+                return
+            objects = self.objects
 
-        all_widgets = self.objects_widgets + [self.class_add_object]
+        all_widgets = objects + [self.class_add_object]
         widget_width = all_widgets[0].minimumWidth() if all_widgets[0].minimumWidth() > 0 else 100
         max_subclasses_per_row = max(1, (self.width() - 10) // (widget_width + 10))
 
@@ -163,50 +166,61 @@ class ClassFieldWidget(QWidget):
 class OverviewClassWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self.fields_list: list[ClassFieldWidget] = []
+        self.fields: list[ClassFieldWidget] = []
 
     def initUI(self, class_name: str=None):
         uic.loadUi(os.path.join(uis_path, "widgets", "overview_class.ui"), self)
         if class_name:
             self.overview_group.setTitle(class_name)
-        self.tab_bar.currentChanged.connect(lambda i: self.scroll_to_field(i))
+        self.tab_bar.currentChanged.connect(self.scroll_to_field)
+        self.lineEdit_search.textChanged.connect(self.search_update)
         self.overview_scroll_area.verticalScrollBar().valueChanged.connect(self.update_tab_selection_from_scroll)
 
 
     def add_field(self, field_widget: ClassFieldWidget, field_name: str):
         self.overview_vertical_layout.addWidget(field_widget)
-        self.fields_list.append(field_widget)
+        self.fields.append(field_widget)
         self.tab_bar.addTab(field_name)
 
     def remove_field(self, field_widget: ClassFieldWidget):
-        if field_widget in self.fields_list:
+        if field_widget in self.fields:
             for i in range(self.tab_bar.count()):
                 if self.tab_bar.tabText(i)==field_widget.class_name.text():
                     self.tab_bar.removeTab(i)
                     break
-            self.fields_list.remove(field_widget)
+            self.fields.remove(field_widget)
             if self.overview_vertical_layout:
                 self.overview_vertical_layout.removeWidget(field_widget)
             field_widget.delete_class()
 
 
+    def search_update(self):
+        search_text = self.lineEdit_search.text().lower()
+        for field in self.fields:
+            for object in field.objects:
+                if search_text in object.object_name.text().lower() or not search_text:
+                    object.show()
+                else:
+                    object.hide()
+        self.update_all_fields_layouts()
+
     def update_all_fields_layouts(self):
-        for field_widget in self.fields_list:
+        for field_widget in self.fields:
             field_widget.update_layout()
 
     def scroll_to_field(self, index: int):
         def _scroll_to_widget(widget, scroll_area):
             pos_in_contents = widget.mapTo(scroll_area.widget(), widget.rect().topLeft())
             scroll_area.verticalScrollBar().setValue(pos_in_contents.y())
-        if 0<=index<len(self.fields_list):
+        if 0<=index<len(self.fields):
             QTimer.singleShot(0, lambda: _scroll_to_widget(
-                self.fields_list[index], self.overview_scroll_area))
+                self.fields[index], self.overview_scroll_area))
 
     def update_tab_selection_from_scroll(self):
         scroll_pos = self.overview_scroll_area.verticalScrollBar().value()
         viewport_height = self.overview_scroll_area.viewport().height()
         best_index, best_visibility = -1, -1
-        for i, field_widget in enumerate(self.fields_list):
+        for i, field_widget in enumerate(self.fields):
             if not field_widget.isVisible():
                 continue
             widget_y = field_widget.mapTo(self.overview_scroll_area.widget(), field_widget.rect().topLeft()).y()
@@ -221,7 +235,7 @@ class OverviewClassWidget(QWidget):
 
 
     def get_field_by_name(self, field_name: str) -> ClassFieldWidget | bool:
-        for field_widget in self.fields_list:
+        for field_widget in self.fields:
             if field_widget.class_name.text()==field_name:
                 return field_widget
         return False
@@ -251,7 +265,7 @@ class MainWindowUI(QMainWindow):
         self.project_resize_timer.timeout.connect(self.project_tab.project_overview.update_all_fields_layouts)
 
     def project_add_class(self, class_name: str = None, enabled: bool = True) -> ClassFieldWidget:
-        class_name = class_name or f"Класс {len(self.project_tab.project_overview.fields_list) + 1}"
+        class_name = class_name or f"Класс {len(self.project_tab.project_overview.fields) + 1}"
         class_widget = ClassFieldWidget()
         class_widget.initUI(class_name, enabled, False)
         self.project_tab.project_overview.add_field(class_widget, class_name)
@@ -331,7 +345,7 @@ class MainWindowUI(QMainWindow):
             field_widget.delete_class()
             class_widget = None
             for widget in self.dataset_tab.classes_tabs.values():
-                if field_widget in widget.fields_list:
+                if field_widget in widget.fields:
                     class_widget = widget
                     break
             if class_widget:
@@ -419,11 +433,12 @@ class MainWindowUI(QMainWindow):
         self.autodataset_update_progress()
 
     def autodataset_set_object_status(
-            self, object_name: str, status: int, object_class_name: str="No class", end_status: int=None):
+            self, object_name: str, status: int=None, object_class_name: str="No class", end_status: int=None):
         if object_name not in self.autodataset_classes_status:
             self.autodataset_classes_status[object_name] = {"class": object_class_name, "status": (0, 0)}
         self.autodataset_classes_status[object_name]["status"] = (
-            status, end_status or self.autodataset_classes_status[object_name]["status"][1])
+            status or self.autodataset_classes_status[object_name]["status"][0],
+            end_status or self.autodataset_classes_status[object_name]["status"][1])
         self.autodataset_visualise_classes_status()
 
     def autodataset_visualise_classes_status(self):
