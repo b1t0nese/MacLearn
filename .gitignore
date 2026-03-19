@@ -1,3 +1,5 @@
 __pycache__/
 .vscode/
+build/
+upx.exe
 todo.txt
