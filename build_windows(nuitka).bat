@@ -1,16 +1,10 @@
 @echo off
-setlocal enabledelayedexpansion
 
-python -m nuitka --standalone --windows-console-mode=disable ^
-    --noinclude-numba-mode=allow --enable-plugin=pyqt6 --follow-imports ^
-    --include-data-dir=src/interface_module/uis=interface_module/uis ^
-    --jobs=11 --output-dir=build --remove-output ^
-    --output-filename=MacLearn.exe src/main.pyw
-
-cd build/main.dist
+rmdir /s /q build
 
 echo.
 echo Downloading UPX v5.1.0 for compress files...
+
 curl -L -o upx.zip "https://github.com/upx/upx/releases/download/v5.1.0/upx-5.1.0-win64.zip"
 echo Extracting upx.exe...
 tar -xf upx.zip upx-5.1.0-win64/upx.exe
@@ -22,19 +16,15 @@ echo Done! UPX version:
 upx --version
 
 echo.
-echo 1. Collecting files...
-set "files="
-for /f "delims=" %%f in ('dir /s /b *.exe *.dll *.pyd') do (
-    set "files=!files! "%%f"")
-echo !files!
+echo Compiling starting...
 
-echo.
-echo 2. Compress all files with LZMA...
-if defined files (cmd /c upx --best --lzma !files!)
-
-echo.
-echo 3. Compress all files with default...
-if defined files (cmd /c upx --best !files!)
+pip install nuitka
+python -m nuitka --standalone --onefile --windows-console-mode=disable ^
+    --follow-imports --noinclude-custom-mode=MODULE_NAME:error --jobs=10 ^
+    --disable-plugin=pyside6 --enable-plugin=pyqt6 --enable-plugin=upx ^
+    --upx-binary="upx.exe" --noinclude-numba-mode=allow --remove-output ^
+    --include-data-dir=src/interface_module/uis=interface_module/uis ^
+    --output-dir=build --output-filename=MacLearn.exe src/main.pyw
 
 del upx.exe >nul
 echo.

@@ -115,13 +115,13 @@ class AutoDataset(QObject):
 
     def update_information(self, log_emit: tuple, subclass_updated: tuple=None,
                            stage_updated: tuple=None, cur_image: tuple=None):
-        # try:
-        self.log_field.emit(*log_emit)
-        if subclass_updated: self.subclass_updated.emit(*subclass_updated)
-        if stage_updated: self.stage_updated.emit(*stage_updated)
-        if cur_image: self.cur_image_label.emit(*cur_image)
-        # except:
-        #     print(f"{log_emit[1]*"\n"}{log_emit[0]}")
+        try:
+            self.log_field.emit(*log_emit)
+            if subclass_updated: self.subclass_updated.emit(*subclass_updated)
+            if stage_updated: self.stage_updated.emit(*stage_updated)
+            if cur_image: self.cur_image_label.emit(*cur_image)
+        except:
+            print(f"{log_emit[1]*"\n"}{log_emit[0]}")
 
 
     def __init__(self, project_manager: Project, chromedriver_path: str=None, chrome_version: int=None):
