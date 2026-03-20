@@ -179,11 +179,9 @@ class AutoDataset(QObject):
 
 
     def download_images(self, subclass_data: dict, class_id: int, num_images: int,
-                        num_val_images: int=0, downloaded: int=0):
+                        num_val_images: int=0, downloaded: int=0, to_download: int=0):
         if num_val_images:
-            images_count = num_images+num_val_images
             self.update_information(('INFO: Установка валидационных данных включена.', 0))
-        else: images_count = num_images
         example_image = subclass_data["example_image"]
 
         self.update_information(('Поиск изображений...', 0))
@@ -237,7 +235,7 @@ class AutoDataset(QObject):
                 image_elements = self.driver.find_elements(By.CSS_SELECTOR, ".Link.ImagesContentImage-Cover")
                 # image_elements = self.driver.find_elements( # или малые изображения (обложки)
                 #     By.CSS_SELECTOR, ".ImagesContentImage-Image.ImagesContentImage-Image_clickable")
-                if len(image_elements)<images_count:
+                if len(image_elements)<num_images+num_val_images:
                     try:
                         self.driver.find_element(By.XPATH, "//button[.//span[text()='Показать ещё']]").click()
                     except: break
@@ -247,29 +245,30 @@ class AutoDataset(QObject):
         self.update_information(('Скачивание изображений...', 0))
         downloaded_images_count = downloaded
         for i, img in enumerate(image_elements):
-            image_id = None
             try:
-                if downloaded_images_count<images_count and self._is_running:
+                if (num_images>0 or num_val_images>0) and self._is_running:
                     self.driver.execute_script("arguments[0].scrollIntoView();", img)
                     self.driver.execute_script("arguments[0].click();", img)
                     img_src = WebDriverWait(self.driver, 10).until(
                         EC.presence_of_element_located((By.CLASS_NAME, "MMImage-Origin"))).get_attribute('src')
                     self.driver.find_element(By.CSS_SELECTOR, ".Button.ImagesViewer-Close").click()
-                    # img_src = img.get_attribute('src') # или малые изображения (обложки)
                     def do_before_download(img_id):
-                        nonlocal downloaded_images_count, image_id, images_count
-                        image_id = img_id
+                        nonlocal downloaded_images_count, num_images, num_val_images
                         self.downloaded_images_count += 1; downloaded_images_count += 1; self.update_information(
-                            (f"Скачан файл {downloaded_images_count}/{images_count}, id: {image_id}", 0),
+                            (f"Скачан файл {downloaded_images_count}/{to_download}, id: {img_id}, image_type: {img_type}", 0),
                             (subclass_data["search_query"], downloaded_images_count, "", 0),
                             ("Download images", (self.downloaded_images_count, self.all_images_count)),
-                            (self.project_manager.get_full_path("images", self.project_manager.get_image(image_id)["filename"]), np.array([])))
+                            (self.project_manager.get_full_path(
+                                "images", self.project_manager.get_image(img_id)["filename"]), np.array([])))
+                        if img_type=="validation": num_val_images -= 1
+                        else: num_images -= 1
+                    if num_images: img_type = "default"
+                    elif num_val_images: img_type = "validation"
                     Thread(target=self.download_image, args=(
-                        img_src, class_id, "validation" if num_val_images and downloaded_images_count>=num_images\
-                            else "default", do_before_download)).start()
+                        img_src, class_id, img_type, do_before_download)).start()
                 else: break
             except Exception as e:
-                self.update_information((f"Ошибка при получении ссылки файла: {e}. Id: {image_id if image_id else i}", 0))
+                self.update_information((f"Ошибка при получении ссылки файла: {e}. Id: {i}", 0))
 
         try:
             self.chrome_widget_lock.emit(False)
@@ -289,10 +288,10 @@ class AutoDataset(QObject):
                     img_counts -= def_count; val_img_counts -= def_val_count
                     img_counts, val_img_counts = (img_counts if img_counts>0 else 0), (val_img_counts if val_img_counts>0 else 0)
                     all_imgs = def_count+def_val_count; self.downloaded_images_count += all_imgs; self.update_information(
-                        (f'INFO: В классе "{subclass_data["search_query"]}" уже присутствует изображений: {all_imgs}.', 1),
+                        (f'INFO: В классе "{subclass_data["search_query"]}" уже присутствует изображений: {all_imgs}. Нужно установить изображений: {img_counts} (тренировочных), {val_img_counts} (валидационных).', 1),
                         (subclass_data["search_query"], all_imgs, "", 0), ("Download images", (self.downloaded_images_count, self.all_images_count)))
-                    if (img_counts or val_img_counts) and all_imgs<must_img_counts+must_val_img_counts:
-                        self.download_images(subclass_data, class_data["class_id"], must_img_counts, must_val_img_counts, all_imgs)
+                    if (img_counts or val_img_counts) and (def_count<must_img_counts or def_val_count<must_val_img_counts):
+                        self.download_images(subclass_data, class_data["class_id"], img_counts, val_img_counts, all_imgs, must_img_counts+must_val_img_counts)
         self.update_information(('Готово! Изображения скачаны.\n', 2))
 
 
@@ -353,11 +352,11 @@ class AutoDataset(QObject):
 
         if self.do_download_images and self.driver:
             self.stage_updated.emit("Download images", (self.downloaded_images_count, self.all_images_count))
-            for class_data in self.project_data["classes"]:
-                if class_data["enabled"]:
-                    for subclass_data in class_data["subclasses"]:
-                        self.subclass_updated.emit(subclass_data["search_query"], 0, class_data["class_name"],
-                                                   round(self.need_download_to_class/len(class_data["subclasses"])))
+        for class_data in self.project_data["classes"]:
+            if class_data["enabled"]:
+                for subclass_data in class_data["subclasses"]:
+                    self.subclass_updated.emit(subclass_data["search_query"], 0, class_data["class_name"],
+                                               round(self.need_download_to_class/len(class_data["subclasses"])))
         if self.project_data["configuration"]["annotation"] and self.do_annotation:
             self.stage_updated.emit("Create annotation", (self.created_annotations_count, self.all_images_count))
         if self.project_data["configuration"]["augmentation"] and self.do_augmentation:
