@@ -143,14 +143,17 @@ class App:
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_image_to_class(c_id, it))
                 for image in self.project_data.get_images(clas["id"], images_type):
                     object_widget = field.get_object(image["filename"])
+                    image_data = self.project_data.get_full_path("images", image["filename"])
+                    if image["annotation"]:
+                        image_data = visualize_bbox(open_image(image_data), image["annotation"])
                     if not object_widget:
-                        image_data = self.project_data.get_full_path("images", image["filename"])
-                        if image["annotation"]:
-                            image_data = visualize_bbox(open_image(image_data), image["annotation"])
                         object_widget = field.add_object(image["filename"], image_data, False, lambda e: None)
                         object_widget.object_delete.clicked.disconnect(); object_widget.object_delete.clicked.connect(
                             lambda e, img_id=image["id"], tf=field, ow=object_widget: (
                                 self.project_data.del_image(img_id), tf.delete_object(ow), tf.update_layout()))
+                        object_widget.image_data = image.copy()
+                    elif object_widget.image_data != image:
+                        object_widget.update_object_image(image_data)
                 field.show_class(clas["enabled"])
         self.windowUI.dataset_update_all_class_layouts()
         classes_names = map(lambda x: x["class_name"], classes)

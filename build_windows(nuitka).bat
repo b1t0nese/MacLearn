@@ -19,7 +19,7 @@ echo.
 echo Compiling starting...
 
 pip install nuitka
-python -m nuitka --standalone --onefile --windows-console-mode=disable ^
+python -m nuitka --standalone --windows-console-mode=attach ^
     --follow-imports --noinclude-custom-mode=MODULE_NAME:error --jobs=10 ^
     --disable-plugin=pyside6 --enable-plugin=pyqt6 --enable-plugin=upx ^
     --upx-binary="upx.exe" --noinclude-numba-mode=allow --remove-output ^
