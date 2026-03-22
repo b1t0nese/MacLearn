@@ -90,7 +90,7 @@ class ClassFieldWidget(QWidget):
             self.class_import_files.deleteLater()
         self.class_checkbox.stateChanged.connect(self.show_class)
         self.class_delete.clicked.connect(self.delete_class)
-        self.class_add_object.clicked.connect(lambda: (self.add_object(), self.update_layout()))
+        self.class_add_object.clicked.connect(lambda: (self.add_object().setVisible(True), self.update_layout()))
         self.class_checkbox.setChecked(enabled)
         if class_name:
             self.class_name.setText(class_name)

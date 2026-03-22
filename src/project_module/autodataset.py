@@ -254,12 +254,14 @@ class AutoDataset(QObject):
                     self.driver.find_element(By.CSS_SELECTOR, ".Button.ImagesViewer-Close").click()
                     def do_before_download(img_id):
                         nonlocal downloaded_images_count, num_images, num_val_images
+                        image_data = self.project_manager.get_image(img_id)
                         self.downloaded_images_count += 1; downloaded_images_count += 1; self.update_information(
-                            (f"Скачан файл {downloaded_images_count}/{to_download}, id: {img_id}, image_type: {img_type}", 0),
+                            (f"Скачан файл {downloaded_images_count}/{to_download}. {
+                                str(image_data).strip("{}").replace("'", "")}", 0),
                             (subclass_data["search_query"], downloaded_images_count, "", 0),
                             ("Download images", (self.downloaded_images_count, self.all_images_count)),
                             (self.project_manager.get_full_path(
-                                "images", self.project_manager.get_image(img_id)["filename"]), np.array([])))
+                                "images", image_data["filename"]), np.array([])))
                         if img_type=="validation": num_val_images -= 1
                         else: num_images -= 1
                     if num_images: img_type = "default"
@@ -321,8 +323,10 @@ class AutoDataset(QObject):
             else:
                 break
             self.update_information(
-                (f"Аннотация №{i+1} {"уже создана" if image_data["annotation"] else "создана"}, данные изображения: {new_img_data or image_data}", 0),
-                stage_updated=("Create annotation", (self.created_annotations_count, self.all_images_count)), cur_image=(image_path, image))
+                (f"Аннотация №{i+1} {"уже создана" if image_data["annotation"] else "создана"}. {
+                    str(new_img_data or image_data).strip("{}").replace("'", "")}", 0),
+                stage_updated=("Create annotation", (
+                    self.created_annotations_count, self.all_images_count)), cur_image=(image_path, image))
             self.created_annotations_count += 1
         self.update_information(('Готово! Аннотация создана.\n', 2))
 
@@ -368,7 +372,7 @@ class AutoDataset(QObject):
         self.update_all_information(True)
         self._is_running, self._image_downloaded = True, True
         self.always_switch_to_main_window_thread = None
-        self.update_information(('Начало работы.\n', 2))
+        self.update_information(('Начало работы.\n', 0))
 
         if self.do_download_images and self.driver:
             self.always_switch_to_main_window_thread = Thread(

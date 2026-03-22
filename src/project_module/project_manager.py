@@ -171,7 +171,9 @@ class Dataset:
         with self.get_connection() as con:
             img_exp = get_image_type(image_bytes)
             if img_exp:
-                filename = f"{uuid.uuid4().hex[:8]}.{img_exp}"
+                filename = ""
+                while not (filename and not self.get_image(filename=filename)):
+                    filename = f"{uuid.uuid4().hex[:8]}.{img_exp}"
                 with open(os.path.join(self.images_path, filename), "wb") as f:
                     f.write(image_bytes)
                 cur = con.cursor()
@@ -218,13 +220,15 @@ class Dataset:
             except:
                 return False
 
-    def get_image(self, image_id: int=None, filename: str=None) -> dict:
+    def get_image(self, image_id: int=None, filename: str=None) -> dict | bool:
         with self.get_connection() as con:
             cur = con.cursor()
-            result = dict(cur.execute("SELECT * FROM dataset WHERE id = ? OR filename = ?",
-                                      (image_id, filename,)).fetchone())
-            result["annotation"] = json.loads(result["annotation"])
-            return result
+            result = cur.execute("SELECT * FROM dataset WHERE id = ? OR filename = ?",
+                                 (image_id, filename,)).fetchone()
+            if result:
+                result = dict(result)
+                result["annotation"] = json.loads(result["annotation"])
+                return result
 
     def get_images(self, class_id: int=None, images_type: str=None) -> list[dict]:
         with self.get_connection() as con:
