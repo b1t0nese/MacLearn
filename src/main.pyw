@@ -18,10 +18,23 @@ from project_module.photoshop import visualize_bbox, open_image
 
 
 def launch_new_instance():
-    subprocess.Popen(
-        [sys.executable] + sys.argv if not getattr(sys, 'frozen', False) else [sys.argv[0]] + sys.argv[1:],
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS if sys.platform == 'win32' else 0,
-        stdin=None, stdout=None, stderr=None, close_fds=True)
+    if getattr(sys, 'frozen', False):
+        executable, args = sys.argv[0], sys.argv[1:]
+    else:
+        executable, args = sys.executable, sys.argv
+    if sys.platform == 'win32':
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        subprocess.Popen(
+            [executable] + args,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+            startupinfo=startupinfo, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, close_fds=True)
+    else:
+        subprocess.Popen(
+            [executable] + args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, close_fds=True, start_new_session=True)
 
 
 
@@ -92,7 +105,8 @@ class App:
         self.windowUI.dataset_tab.btn_export_dataset.clicked.connect(self.export_dataset_data)
         self.windowUI.autodataset_tab.work_tab.btn_start.clicked.connect(self.toggle_autodataset_work)
         self.autodataset_worker_connect_signals(); at = self.windowUI.autodataset_tab; at.orgShowEvent = at.showEvent
-        at.showEvent = lambda e: [at.orgShowEvent(e), self.autodataset_worker.update_all_information()][0]
+        at.showEvent = lambda e: [at.orgShowEvent(e), self.windowUI.autodataset_classes_status.clear(),
+                                  self.autodataset_worker.update_all_information()][0]
 
         self.windowUI.actionOpen.triggered.connect(self.open_project)
         self.windowUI.actionSave.triggered.connect(self.save_project)
@@ -127,6 +141,7 @@ class App:
             class_overview = self.windowUI.dataset_tab.classes_tabs.get(clas["class_name"])
             if not class_overview:
                 class_overview = self.windowUI.dataset_add_class(clas["class_name"])
+
             for images_type in ["default", "augment", "validation"]:
                 field = self.windowUI.get_class_field_in_dataset(clas["class_name"], images_type)
                 if not field:
@@ -135,12 +150,11 @@ class App:
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_images_to_class(c_id, it))
                     field.class_export_files.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.export_images_from_class(c_id, it))
-                    field.class_delete_command = lambda e=None, c_id=clas["id"], cw=field, it=images_type, uc=True: [
-                        self.project_data.del_image(img["id"]) for img in self.project_data.get_images(c_id, it)]\
-                            if self.windowUI.dataset_delete_class_field_widget(cw, uc) else None
-                    field.class_delete.clicked.disconnect(); field.class_delete.clicked.connect(field.class_delete_command)
+                    field.class_delete.clicked.disconnect(); field.class_delete.clicked.connect(
+                        lambda e=None, c_id=clas["id"], fw=field, uc=True: self.class_delete_command(c_id, fw, uc))
                     field.class_add_object.clicked.disconnect(); field.class_add_object.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_image_to_class(c_id, it))
+
                 for image in self.project_data.get_images(clas["id"], images_type):
                     object_widget = field.get_object(image["filename"])
                     image_data = self.project_data.get_full_path("images", image["filename"])
@@ -154,8 +168,10 @@ class App:
                         object_widget.image_data = image.copy()
                     elif object_widget.image_data != image:
                         object_widget.update_object_image(image_data)
+
                 field.show_class(clas["enabled"])
         self.windowUI.dataset_update_all_class_layouts()
+
         classes_names = map(lambda x: x["class_name"], classes)
         for class_name, class_overview in self.windowUI.dataset_tab.classes_tabs.copy().items():
             if not class_name in classes_names:
@@ -164,29 +180,47 @@ class App:
                 self.windowUI.dataset_delete_class(class_overview, False)
 
 
+    def class_delete_command(self, class_id: int=None, field_widget=None, user_call: bool=True):
+        if not self.windowUI.dataset_delete_class_field_widget(field_widget, user_call):
+            return
+        log_window = LogsUI(); log_window.show()
+        log_window.log(f'Удаление изображений из класса id={class_id}, type={field_widget.class_name.text()}...\n')
+        QApplication.processEvents()
+        try:
+            all_images = self.project_data.get_images(class_id, field_widget.class_name.text()); total = len(all_images)
+            for i, img in enumerate(all_images):
+                self.project_data.del_image(img["id"])
+                log_window.log(f'Удалено изображение {img["filename"]} {i+1}/{total}.')
+                log_window.set_progress(int((i + 1) / total * 100))
+                QApplication.processEvents()
+            log_window.log(f'Успех: изображения удалены из класса id={class_id}, type={field_widget.class_name.text()}.', 1)
+        except Exception as e:
+            log_window.log(f'Ошибка: {e}', 1)
+        finally:
+            log_window.wait_while_not_exit()
+            self.update_dataset_view_in_window()
+
     def export_images_from_class(self, class_id: int, images_type: str="default", dist_path: str=None):
         dist_path = QFileDialog.getExistingDirectory(
             None, "Выберите папку, куда будут скопированы изображения", "") if not dist_path else dist_path
         if not dist_path:
             return
-        log_window = LogsUI()
-        log_window.show()
+        log_window = LogsUI(); log_window.show()
+        log_window.log(f'Экспорт изображений из класса id={class_id}, type={images_type} в "{dist_path}"...\n')
         QApplication.processEvents()
         os.makedirs(dist_path, exist_ok=True)
-        log_window.log(f'Экспорт изображений из класса id={class_id}, type={images_type} в "{dist_path}"\n')
+        all_images = self.project_data.get_images(class_id, images_type); total = len(all_images)
         try:
-            all_images = self.project_data.get_images(class_id, images_type)
-            total = len(all_images)
             for i, image_data in enumerate(all_images):
                 image_path = self.project_data.get_full_path("images", image_data["filename"])
                 dist_image_path = os.path.join(dist_path, os.path.basename(image_path))
                 shutil.copy2(image_path, dist_image_path)
-                log_window.log(f'Экспортировано изображение {i+1}/{total}: {os.path.basename(image_path)} в {dist_image_path}')
+                log_window.log(f'Экспортировано изображение {i+1}/{total}: {os.path.basename(image_path)} в {dist_image_path}.')
                 log_window.set_progress(int((i + 1) / total * 100))
                 QApplication.processEvents()
-            log_window.log(f'Успех: изображения скопированы в {dist_path}')
+            log_window.log(f'Успех: изображения скопированы в {dist_path}.', 1)
         except Exception as e:
-            log_window.log(f'Ошибка: {e}')
+            log_window.log(f'Ошибка: {e}', 1)
         finally:
             log_window.wait_while_not_exit()
             QDesktopServices.openUrl(QUrl.fromLocalFile(dist_path))
@@ -204,21 +238,24 @@ class App:
             None, "Выберите папку с изображениями, которые хотите импортировать", "") if not images_path else images_path
         if not images_path:
             return
-        log_window = LogsUI()
-        log_window.show()
+        log_window = LogsUI(); log_window.show()
+        log_window.log(f'Импорт изображений в класс id={class_id}, type={images_type} из "{images_path}"...\n')
         QApplication.processEvents()
-        images_paths = os.listdir(images_path)
-        total = len(images_paths)
-        for i, image_name in enumerate(images_paths):
-            image_path = os.path.join(images_path, image_name)
-            with open(image_path, "rb") as f:
-                self.project_data.save_image(f.read(), class_id, images_type)
-            log_window.log(f'Импортировано изображение {i+1}/{total}: {image_name} в {image_path}')
-            log_window.set_progress(int((i + 1) / total * 100))
-            QApplication.processEvents()
-        log_window.log("Готово!")
-        log_window.wait_while_not_exit()
-        self.update_dataset_view_in_window()
+        images_paths = os.listdir(images_path); total = len(images_paths)
+        try:
+            for i, image_name in enumerate(images_paths):
+                image_path = os.path.join(images_path, image_name)
+                with open(image_path, "rb") as f:
+                    self.project_data.save_image(f.read(), class_id, images_type)
+                log_window.log(f'Импортировано изображение {i+1}/{total}: {image_name} в "{image_path}".')
+                log_window.set_progress(int((i + 1) / total * 100))
+                QApplication.processEvents()
+            log_window.log(f'Успех: изображения скопированы в класс id={class_id}, type={images_type} из "{images_path}".', 1)
+        except Exception as e:
+            log_window.log(f'Ошибка: {e}', 1)
+        finally:
+            log_window.wait_while_not_exit()
+            self.update_dataset_view_in_window()
 
     def open_project(self, project_path: str=None) -> bool:
         if not project_path:
@@ -342,7 +379,8 @@ class App:
 
     def autodataset_worker_disconnect_signals(self):
         try:
-            self.autodataset_worker.chrome_widget_lock.disconnect()
+            if self.autodataset_worker.driver:
+                self.autodataset_worker.chrome_widget_lock.disconnect()
             self.autodataset_worker.log_field.disconnect()
             self.autodataset_worker.cur_image_label.disconnect()
             self.autodataset_worker.stage_updated.disconnect()

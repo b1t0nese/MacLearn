@@ -198,7 +198,14 @@
            </sizepolicy>
           </property>
           <property name="styleSheet">
-           <string notr="true">background-color: #000000; color: #ffffff; font-family: 'Courier New'; font-size: 11px;</string>
+           <string notr="true">
+QTextEdit {
+    background-color: #000000;
+    color: #ffffff;
+    font-family: 'Courier New';
+    font-size: 12px;
+}
+           </string>
           </property>
           <property name="readOnly">
            <bool>true</bool>
