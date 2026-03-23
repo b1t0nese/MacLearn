@@ -1,6 +1,18 @@
 @echo off
 
-rmdir /s /q build
+echo.
+echo Prepare environment for build...
+
+python -m venv build_env
+rmdir /s /q build_env/src
+robocopy "src" "build_env/src" /E /NFL /NDL /NJH /NJS
+
+echo.
+echo Installing requirements...
+
+call "build_env/Scripts/pip.exe" install -r requirements.txt
+
+cd build_env
 
 echo.
 echo Downloading UPX v5.1.0 for compress files...
@@ -18,14 +30,13 @@ upx --version
 echo.
 echo Compiling starting...
 
-pip install nuitka
-python -m nuitka --standalone --windows-console-mode=attach ^
-    --follow-imports --noinclude-custom-mode=MODULE_NAME:error --jobs=10 ^
-    --disable-plugin=pyside6 --enable-plugin=pyqt6 --enable-plugin=upx ^
-    --upx-binary="upx.exe" --noinclude-numba-mode=allow --remove-output ^
+call "Scripts/pip.exe" install nuitka
+call "Scripts/python.exe" -m nuitka --standalone --windows-console-mode=attach --jobs=10 ^
+    --follow-imports --noinclude-custom-mode=MODULE_NAME:error --enable-plugin=pyqt6 ^
+    --module-parameter=numba-disable-jit=yes --noinclude-numba-mode=allow ^
+    --enable-plugin=upx --upx-binary="upx.exe" --onefile-no-compression ^
     --include-data-dir=src/interface_module/uis=interface_module/uis ^
     --output-dir=build --output-filename=MacLearn.exe src/main.pyw
 
-del upx.exe >nul
 echo.
 echo Compiling successfuly end!
