@@ -180,12 +180,19 @@ class OverviewClassWidget(QWidget):
     def add_field(self, field_widget: ClassFieldWidget, field_name: str):
         self.overview_vertical_layout.addWidget(field_widget)
         self.fields.append(field_widget)
-        self.tab_bar.addTab(field_name)
+        self.tab_bar.setTabData(self.tab_bar.addTab(field_name), field_widget)
+        field_widget.class_name.textChanged.connect(lambda name: self.update_tab_name(field_widget, name))
+
+    def update_tab_name(self, field_widget: ClassFieldWidget, new_name: str):
+        for i in range(self.tab_bar.count()):
+            if self.tab_bar.tabData(i) is field_widget:
+                self.tab_bar.setTabText(i, new_name)
+                break
 
     def remove_field(self, field_widget: ClassFieldWidget):
         if field_widget in self.fields:
             for i in range(self.tab_bar.count()):
-                if self.tab_bar.tabText(i)==field_widget.class_name.text():
+                if self.tab_bar.tabData(i) is field_widget:
                     self.tab_bar.removeTab(i)
                     break
             self.fields.remove(field_widget)
