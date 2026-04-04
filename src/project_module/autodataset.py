@@ -7,7 +7,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from undetected_chromedriver import Chrome
+from undetected_chromedriver import Chrome, ChromeOptions
+from stealthenium import stealth
 from requests import get as get_request
 from threading import Thread
 from platform import system as platf_system
@@ -124,14 +125,26 @@ class AutoDataset(QObject):
             print(f"{log_emit[1]*"\n"}{log_emit[0]}")
 
 
-    def __init__(self, project_manager: Project, chromedriver_path: str=None, chrome_version: int=None):
+    def __init__(self, project_manager: Project, chromedriver_path: str=None,
+                 chrome_version: int=None, chrome_headless: bool=True):
         super().__init__()
         self._is_running = False
         self._image_downloaded = True
 
         try:
             service = Service(ChromeDriverManager().install())
-            self.driver = Chrome(service=service, driver_executable_path=chromedriver_path, version_main=chrome_version)
+            options = ChromeOptions()
+            self.chrome_headless = chrome_headless
+            if self.chrome_headless:
+                options.add_argument('--headless')
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--disable-blink-features=AutomationControlled')
+                options.add_argument('--window-size=1920,1080')
+                options.add_argument('--disable-gpu')
+                options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                options.add_argument('--log-level=3')
+            self.driver = Chrome(options, service=service, driver_executable_path=chromedriver_path, version_main=chrome_version)
             self.clipboard_manager = ClipboardManager()
         except Exception as e:
             self.driver, self.clipboard_manager = None, None
