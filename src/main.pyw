@@ -86,12 +86,13 @@ class App:
             self.autodataset_worker = None
         self.project_data = Project(project_path)
         self.autodataset_worker = AutoDataset(
-            self.project_data, self.config["chromedriver_path"], self.config["chrome_version"])
+            self.project_data, self.config["chromedriver_path"],
+            self.config["chrome_version"], not self.config["visual_chrome"])
         self.windowUI.initUI()
         self.init_config_window()
         self.init_project_conf_in_window()
         self.update_dataset_view_in_window()
-        if self.autodataset_worker.driver:
+        if self.autodataset_worker.driver and not self.autodataset_worker.chrome_headless:
             self.windowUI.add_another_program_to_autodataset("chrome.exe")
         self.windowUI.autodataset_update_statuses()
         self.windowUI.show()
@@ -379,7 +380,7 @@ class App:
 
     def autodataset_worker_disconnect_signals(self):
         try:
-            if self.autodataset_worker.driver:
+            if self.autodataset_worker.driver and not self.autodataset_worker.chrome_headless:
                 self.autodataset_worker.chrome_widget_lock.disconnect()
             self.autodataset_worker.log_field.disconnect()
             self.autodataset_worker.cur_image_label.disconnect()
@@ -389,7 +390,7 @@ class App:
 
     def autodataset_worker_connect_signals(self):
         self.autodataset_worker_disconnect_signals()
-        if self.autodataset_worker.driver:
+        if self.autodataset_worker.driver and not self.autodataset_worker.chrome_headless:
             self.autodataset_worker.chrome_widget_lock.connect(
                 lambda boolean: self.windowUI.autodataset_tab.program_tab.set_lock_resize(boolean))
         self.autodataset_worker.log_field.connect(self.windowUI.autodataset_log)
@@ -432,6 +433,8 @@ def main():
                             help="version of Chrome installed on your computer (you can skip this, if the program is working fine)")
     arg_parser.add_argument("--chromedriver-path", type=str, default=None,
                             help="path to your chromedriver (you can skip this, if the program is working fine)")
+    arg_parser.add_argument("-visual-chrome", action='store_true', default=False,
+                            help="if you want to see browser in work, enable this feature")
     arguments = arg_parser.parse_args()
 
     application = QApplication(sys.argv)
