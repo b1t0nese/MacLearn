@@ -409,8 +409,8 @@ class MainWindowUI(QMainWindow):
             new_btn_start_style = new_btn_start_style.replace("#b71c1c", "#3d8b40")
         self.autodataset_tab.work_tab.btn_start.setStyleSheet(new_btn_start_style)
 
-    def add_another_program_to_autodataset(self, program_name: str):
-        self.autodataset_tab.program_tab = EmbeddedProgramWidget(program_name)
+    def add_another_program_to_autodataset(self, program_name: str, program_pid: int=None):
+        self.autodataset_tab.program_tab = EmbeddedProgramWidget(program_name, program_pid)
         self.autodataset_tab.tab_widget.addTab(self.autodataset_tab.program_tab, program_name)
         def embed_on_tab_switch(index):
             current_widget = self.autodataset_tab.tab_widget.widget(index)

@@ -13,4 +13,3 @@ undetected_chromedriver
 webdriver_manager
 onnxruntime
 standard_distutils
-stealthenium

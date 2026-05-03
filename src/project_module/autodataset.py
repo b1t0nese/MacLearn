@@ -8,13 +8,13 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from undetected_chromedriver import Chrome, ChromeOptions
-from stealthenium import stealth
 from requests import get as get_request
-from threading import Thread
+from threading import Thread, Lock as thr_Lock
 from platform import system as platf_system
 from time import sleep, time as ntime
-from typing import Callable
 import subprocess
+import numpy as np
+import queue
 import cv2
 import os
 
@@ -126,25 +126,30 @@ class AutoDataset(QObject):
 
 
     def __init__(self, project_manager: Project, chromedriver_path: str=None,
-                 chrome_version: int=None, chrome_headless: bool=True):
+                 chrome_version: int=None, chrome_headless: bool=False):
         super().__init__()
         self._is_running = False
         self._image_downloaded = True
 
         try:
-            service = Service(ChromeDriverManager().install())
+            service = Service(ChromeDriverManager().install()) if not chromedriver_path else None
             options = ChromeOptions()
             self.chrome_headless = chrome_headless
             if self.chrome_headless:
                 options.add_argument('--headless')
-                options.add_argument('--no-sandbox')
                 options.add_argument('--disable-dev-shm-usage')
-                options.add_argument('--disable-blink-features=AutomationControlled')
                 options.add_argument('--window-size=1920,1080')
                 options.add_argument('--disable-gpu')
-                options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                options.add_argument('--log-level=3')
-            self.driver = Chrome(options, service=service, driver_executable_path=chromedriver_path, version_main=chrome_version)
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-features=ChromeBrowserCloudManagement')
+            options.add_argument('--disable-blink-features=AutomationControlled')
+            options.add_argument('--disable-infobars')
+            options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' \
+                'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+            options.add_argument('--log-level=3')
+            self.driver = Chrome(options, service=service, version_main=chrome_version,
+                driver_executable_path=chromedriver_path)
+            self.chrome_pid = self.driver.service.process.pid
             self.clipboard_manager = ClipboardManager()
         except Exception as e:
             self.driver, self.clipboard_manager = None, None
@@ -178,116 +183,157 @@ class AutoDataset(QObject):
             self.driver.switch_to.window(self.driver.window_handles[0])
 
 
-    def download_image(self, img_src: str, class_id: int, image_type: str, do_before_download: Callable=None):
-        self._image_downloaded = False
-        try:
-            response = get_request(img_src)
-            if response.status_code==200:
-                image_id = self.project_manager.save_image(
-                    response.content, class_id, image_type)
-                do_before_download(image_id)
-        except Exception as e:
-            self.update_information((f"Ошибка при скачивании файла: {e}. src: {img_src}", 0))
-        self._image_downloaded = True
-
-
     def download_images(self, subclass_data: dict, class_id: int, num_images: int,
-                        num_val_images: int=0, downloaded: int=0, to_download: int=0):
+                        num_val_images: int = 0, downloaded: int = 0, to_download: int = 0):
         if num_val_images:
             self.update_information(('INFO: Установка валидационных данных включена.', 0))
-        example_image = subclass_data["example_image"]
 
-        self.update_information(('Поиск изображений...', 0))
-        self.driver.get("https://yandex.ru/images")
+        self._stop_collector = False
+        self._image_queue = queue.Queue()
+        self._counters_lock = thr_Lock()
         try:
             self.chrome_widget_lock.emit(True)
-        except: pass
+        except:
+            pass
 
-        if example_image:
-            self.clipboard_manager.copy_image_to_clipboard(
-                self.project_manager.get_full_path("example_images", example_image))
-            search_box = self.driver.find_element(By.NAME, "text")
-            ActionChains(self.driver).key_down(Keys.CONTROL).send_keys("v")\
-                .key_up(Keys.CONTROL).perform()
+        def collector():
+            seen_urls = set()
+            example_image = subclass_data["example_image"]
+            self.update_information(('Поиск изображений...', 0))
 
-            try:
-                WebDriverWait(self.driver, 5).until(
-                    EC.presence_of_element_located((
-                        By.CSS_SELECTOR, ".CbirIntent.cbir-intent.cbir-intent_visible_yes.i-bem.cbir-intent_js_inited.cbir-intent_loaded_yes")))
-                search_box = WebDriverWait(self.driver, 5).until(
-                    EC.presence_of_element_located((By.TAG_NAME, "textarea")))
-                search_box.send_keys(subclass_data["search_query"])
-                sleep(0.5)
-                search_box.send_keys(Keys.ENTER)
-                while self._is_running:
-                    try:
-                        WebDriverWait(self.driver, 10).until(
-                            EC.presence_of_element_located((
-                                By.XPATH, "//a[text()='Похожие' and @class='CbirNavigation-TabsItem CbirNavigation-TabsItem_name_similar-page']"))
-                        ).click()
+            if example_image:
+                self.driver.get("https://yandex.ru/images")
+                self.clipboard_manager.copy_image_to_clipboard(
+                    self.project_manager.get_full_path("example_images", example_image))
+                search_box = self.driver.find_element(By.NAME, "text")
+                ActionChains(self.driver).key_down(Keys.CONTROL).send_keys("v")\
+                    .key_up(Keys.CONTROL).perform()
+                try:
+                    WebDriverWait(self.driver, 5).until(
+                        EC.presence_of_element_located((
+                            By.CSS_SELECTOR, ".CbirIntent.cbir-intent.cbir-intent_visible_yes.i-bem.cbir-intent_js_inited.cbir-intent_loaded_yes")))
+                    search_box = WebDriverWait(self.driver, 5).until(
+                        EC.presence_of_element_located((By.TAG_NAME, "textarea")))
+                    search_box.send_keys(subclass_data["search_query"])
+                    sleep(0.5)
+                    search_box.send_keys(Keys.ENTER)
+                    start = ntime()
+                    while not self._stop_collector:
+                        try:
+                            WebDriverWait(self.driver, 10).until(
+                                EC.presence_of_element_located((
+                                    By.XPATH, "//a[text()='Похожие' and @class='CbirNavigation-TabsItem "
+                                    "CbirNavigation-TabsItem_name_similar-page']"))).click()
+                            break
+                        except:
+                            if ntime() - start > 30:
+                                example_image = None
+                                break
+                            sleep(0.5)
+                except:
+                    example_image = None
+
+            if not example_image:
+                self.driver.get(f"https://yandex.ru/images/search?text={url_quote(subclass_data['search_query'])}")
+
+            self.update_information(('Идёт прогрузка изображений...', 0))
+            last_height = self.driver.execute_script("return document.body.scrollHeight")
+            while not self._stop_collector:
+                scroll_start = ntime()
+                new_height = last_height
+                while new_height == last_height and not self._stop_collector:
+                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    sleep(0.5)
+                    new_height = self.driver.execute_script("return document.body.scrollHeight")
+                    if ntime() - scroll_start >= 5:
                         break
-                    except: pass
-            except:
-                example_image = None
-
-        if not example_image:
-            self.driver.get(f"https://yandex.ru/images/search?text={url_quote(subclass_data['search_query'])}")
-
-        self.update_information(('Идёт прогрузка изображений...', 0))
-        image_elements = []
-        new_height = self.driver.execute_script("return document.body.scrollHeight")
-        last_height = self.driver.execute_script("return document.body.scrollHeight")
-        while self._is_running:
-            scroll_st = ntime()
-            while new_height==last_height:
-                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                new_height = self.driver.execute_script("return document.body.scrollHeight")
-                if ntime()-scroll_st>=5:
-                    break                
-            if ntime()-scroll_st>=5:
-                image_elements = self.driver.find_elements(By.CSS_SELECTOR, ".Link.ImagesContentImage-Cover")
-                # image_elements = self.driver.find_elements( # или малые изображения (обложки)
-                #     By.CSS_SELECTOR, ".ImagesContentImage-Image.ImagesContentImage-Image_clickable")
-                if len(image_elements)<num_images+num_val_images:
+                if ntime() - scroll_start >= 5 or self._stop_collector:
                     try:
-                        self.driver.find_element(By.XPATH, "//button[.//span[text()='Показать ещё']]").click()
-                    except: break
-                else: break
-            last_height = new_height
+                        show_more = self.driver.find_element(By.XPATH, "//button[.//span[text()='Показать ещё']]")
+                        show_more.click()
+                        sleep(1)
+                    except:
+                        pass
+                    last_height = self.driver.execute_script("return document.body.scrollHeight")
+                    continue
+                last_height = new_height
 
-        self.update_information(('Скачивание изображений...', 0))
-        downloaded_images_count = downloaded
-        for i, img in enumerate(image_elements):
-            try:
-                if (num_images>0 or num_val_images>0) and self._is_running:
-                    self.driver.execute_script("arguments[0].scrollIntoView();", img)
-                    self.driver.execute_script("arguments[0].click();", img)
-                    img_src = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.CLASS_NAME, "MMImage-Origin"))).get_attribute('src')
-                    self.driver.find_element(By.CSS_SELECTOR, ".Button.ImagesViewer-Close").click()
-                    def do_before_download(img_id):
-                        nonlocal downloaded_images_count, num_images, num_val_images
-                        image_data = self.project_manager.get_image(img_id)
-                        self.downloaded_images_count += 1; downloaded_images_count += 1; self.update_information(
-                            (f"Скачан файл {downloaded_images_count}/{to_download}. {
-                                str(image_data).strip("{}").replace("'", "")}", 0),
+                image_elements = self.driver.find_elements(By.CSS_SELECTOR, ".Link.ImagesContentImage-Cover")
+                for img in image_elements:
+                    if self._stop_collector:
+                        break
+                    try:
+                        self.driver.execute_script("arguments[0].scrollIntoView();", img)
+                        self.driver.execute_script("arguments[0].click();", img)
+                        img_src = WebDriverWait(self.driver, 10).until(
+                            EC.presence_of_element_located((By.CLASS_NAME, "MMImage-Origin"))
+                        ).get_attribute('src')
+                        self.driver.find_element(By.CSS_SELECTOR, ".Button.ImagesViewer-Close").click()
+                        if img_src not in seen_urls:
+                            seen_urls.add(img_src)
+                            self._image_queue.put(img_src)
+                    except Exception as e:
+                        sleep(0.2)
+            self._image_queue.put(None)
+
+        def downloader():
+            nonlocal downloaded, num_images, num_val_images
+            downloaded_images_count = downloaded
+
+            while True:
+                try:
+                    url = self._image_queue.get(timeout=1)
+                except queue.Empty:
+                    if self._stop_collector:
+                        break
+                    continue
+                if url is None:
+                    break
+
+                with self._counters_lock:
+                    if num_images > 0:
+                        img_type = "default"
+                    elif num_val_images > 0:
+                        img_type = "validation"
+                    else:
+                        break
+                try:
+                    response = get_request(url)
+                    if response.status_code == 200:
+                        image_id = self.project_manager.save_image(response.content, class_id, img_type)
+                        with self._counters_lock:
+                            if img_type == "validation":
+                                num_val_images -= 1
+                            else:
+                                num_images -= 1
+                        downloaded_images_count += 1
+                        self.downloaded_images_count += 1
+                        image_data = self.project_manager.get_image(image_id)
+                        self.update_information(
+                            (f"Скачан файл {downloaded_images_count}/{to_download}. {str(image_data).strip('{}').replace("'", '')}", 0),
                             (subclass_data["search_query"], downloaded_images_count, "", 0),
                             ("Download images", (self.downloaded_images_count, self.all_images_count)),
-                            (self.project_manager.get_full_path(
-                                "images", image_data["filename"]), np.array([])))
-                        if img_type=="validation": num_val_images -= 1
-                        else: num_images -= 1
-                    if num_images: img_type = "default"
-                    elif num_val_images: img_type = "validation"
-                    Thread(target=self.download_image, args=(
-                        img_src, class_id, img_type, do_before_download)).start()
-                else: break
-            except Exception as e:
-                self.update_information((f"Ошибка при получении ссылки файла: {e}. Id: {i}", 0))
+                            (self.project_manager.get_full_path("images", image_data["filename"]), np.array([])))
+                except Exception as e:
+                    self.update_information((f"Ошибка при скачивании файла: {e}. src: {url}", 0))
 
+                with self._counters_lock:
+                    if num_images <= 0 and num_val_images <= 0:
+                        self._stop_collector = True
+                        break
+
+        collector_thread = Thread(target=collector, daemon=True)
+        downloader_thread = Thread(target=downloader, daemon=True)
+        collector_thread.start()
+        downloader_thread.start()
+
+        downloader_thread.join()
+        self._stop_collector = True
+        collector_thread.join(timeout=5)
         try:
             self.chrome_widget_lock.emit(False)
-        except: pass
+        except:
+            pass
 
 
     def download_images_data(self):
