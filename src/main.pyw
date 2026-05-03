@@ -86,14 +86,13 @@ class App:
             self.autodataset_worker = None
         self.project_data = Project(project_path)
         self.autodataset_worker = AutoDataset(
-            self.project_data, self.config["chromedriver_path"],
-            self.config["chrome_version"], not self.config["visual_chrome"])
+            self.project_data, self.config["chromedriver_path"], self.config["chrome_version"], self.config["chrome_headless"])
         self.windowUI.initUI()
         self.init_config_window()
         self.init_project_conf_in_window()
         self.update_dataset_view_in_window()
         if self.autodataset_worker.driver and not self.autodataset_worker.chrome_headless:
-            self.windowUI.add_another_program_to_autodataset("chrome.exe")
+            self.windowUI.add_another_program_to_autodataset("chrome.exe", self.autodataset_worker.chrome_pid)
         self.windowUI.autodataset_update_statuses()
         self.windowUI.show()
 
@@ -106,8 +105,7 @@ class App:
         self.windowUI.dataset_tab.btn_export_dataset.clicked.connect(self.export_dataset_data)
         self.windowUI.autodataset_tab.work_tab.btn_start.clicked.connect(self.toggle_autodataset_work)
         self.autodataset_worker_connect_signals(); at = self.windowUI.autodataset_tab; at.orgShowEvent = at.showEvent
-        at.showEvent = lambda e: [at.orgShowEvent(e), self.windowUI.autodataset_classes_status.clear(),
-                                  self.autodataset_worker.update_all_information()][0]
+        at.showEvent = lambda e: [at.orgShowEvent(e), self.autodataset_worker.update_all_information()][0]
 
         self.windowUI.actionOpen.triggered.connect(self.open_project)
         self.windowUI.actionSave.triggered.connect(self.save_project)
@@ -433,8 +431,8 @@ def main():
                             help="version of Chrome installed on your computer (you can skip this, if the program is working fine)")
     arg_parser.add_argument("--chromedriver-path", type=str, default=None,
                             help="path to your chromedriver (you can skip this, if the program is working fine)")
-    arg_parser.add_argument("-visual-chrome", action='store_true', default=False,
-                            help="if you want to see browser in work, enable this feature")
+    arg_parser.add_argument("-chrome-headless", action='store_true', default=False,
+                            help="if you don't want to see the browser, enable this feature")
     arguments = arg_parser.parse_args()
 
     application = QApplication(sys.argv)

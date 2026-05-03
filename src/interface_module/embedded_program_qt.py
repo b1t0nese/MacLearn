@@ -3,14 +3,35 @@ from PyQt6.QtCore import QTimer
 import win32process
 import win32gui
 import win32con
+import psutil
+
+
+
+def get_window_hwnd(program_pid: int):
+    hwnd_list = []
+    def enum_windows(hwnd, _):
+        if win32gui.IsWindowVisible(hwnd):
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            if pid == program_pid:
+                hwnd_list.append(hwnd)
+        return True
+    win32gui.EnumWindows(enum_windows, None)
+    if hwnd_list:
+        for hwnd in hwnd_list:
+            if win32gui.GetWindowText(hwnd):
+                return hwnd
+        return hwnd_list[0]
 
 
 
 class EmbeddedProgramWidget(QWidget):
-    def __init__(self, process_name):
+    def __init__(self, process_name: str=None, process_pid: int=None):
         super().__init__()
-        self.program_hwnd = None
+        if process_name is None and process_pid is None:
+            raise AttributeError("Attributes for targeting process not found.")
         self.process_name = process_name
+        self.process_pid = process_pid
+        self.program_hwnd = get_window_hwnd(self.process_pid) if self.process_pid else None
         self.embed_attempted = False
         self.locked_resize = False
 
@@ -33,19 +54,18 @@ class EmbeddedProgramWidget(QWidget):
 
     def embed_program(self):
         if self.program_hwnd:
+            self.link_window()
             return
 
         def enum_callback(hwnd, results):
             if win32gui.IsWindowVisible(hwnd):
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
                 try:
-                    import psutil
                     process = psutil.Process(pid)
                     process_name = process.name().lower()
                     if self.process_name == process_name:
                         results.append(hwnd)
                 except:
-                    title = win32gui.GetWindowText(hwnd)
                     class_name = win32gui.GetClassName(hwnd)
                     if 'Chrome_WidgetWin' in class_name:
                         results.append(hwnd)
@@ -55,8 +75,11 @@ class EmbeddedProgramWidget(QWidget):
         win32gui.EnumWindows(enum_callback, program_windows)
         if program_windows:
             self.program_hwnd = program_windows[-1]
-            self.set_window_style()
-            win32gui.SetParent(self.program_hwnd, int(self.winId()))
+            self.link_window()
+
+    def link_window(self):
+        self.set_window_style()
+        win32gui.SetParent(self.program_hwnd, int(self.winId()))
 
 
     def move_window(self):
