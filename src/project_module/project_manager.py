@@ -57,12 +57,12 @@ class Dataset:
         with self.get_connection() as con:
             cur = con.cursor()
 
+            cur.execute("PRAGMA foreign_keys = ON;")
+
             cur.execute("""CREATE TABLE IF NOT EXISTS configuration (
                 key TEXT PRIMARY KEY,
                 value TEXT
             );""")
-
-            cur.execute("PRAGMA foreign_keys = ON;")
 
             cur.execute("""CREATE TABLE IF NOT EXISTS classes_conf (
                 id INTEGER PRIMARY KEY,
@@ -77,9 +77,12 @@ class Dataset:
                 class_id INTEGER NOT NULL,
                 type TEXT DEFAULT "DEFAULT",
                 annotation TEXT DEFAULT "[]",
-                FOREIGN KEY (class_id) REFERENCES classes_conf(id),
+                parent_image_id INTEGER DEFAULT NULL,
                 FOREIGN KEY (class_id) REFERENCES classes_conf(id)
                     ON DELETE CASCADE
+                    ON UPDATE CASCADE,
+                FOREIGN KEY (parent_image_id) REFERENCES dataset(id)
+                    ON DELETE SET NULL
                     ON UPDATE CASCADE
             );""")
 
@@ -166,8 +169,8 @@ class Dataset:
         return dict([(x, i) for i, x in enumerate(classes_ids)])
 
 
-    def save_image(self, image_bytes: bytes, class_id: int,
-                   image_type: str="default", annotation: list=[]) -> int:
+    def save_image(self, image_bytes: bytes, class_id: int, image_type: str="default",
+                   annotation: list=[], parent_image_id: int=None) -> int:
         with self.get_connection() as con:
             img_exp = get_image_type(image_bytes)
             if img_exp:
@@ -177,8 +180,8 @@ class Dataset:
                 with open(os.path.join(self.images_path, filename), "wb") as f:
                     f.write(image_bytes)
                 cur = con.cursor()
-                cur.execute("INSERT INTO dataset(filename, class_id, type, annotation) "+\
-                            "VALUES(?, ?, ?, ?)", (filename, class_id, image_type, json.dumps(annotation)))
+                cur.execute("INSERT INTO dataset(filename, class_id, type, annotation, parent_image_id) "+\
+                            "VALUES(?, ?, ?, ?, ?)", (filename, class_id, image_type, json.dumps(annotation), parent_image_id))
                 con.commit()
                 return int(cur.lastrowid)
 
@@ -230,18 +233,15 @@ class Dataset:
                 result["annotation"] = json.loads(result["annotation"])
                 return result
 
-    def get_images(self, class_id: int=None, images_type: str=None) -> list[dict]:
+    def get_images(self, **kwargs) -> list[dict]:
         with self.get_connection() as con:
             cur = con.cursor()
             ex, ex_atrbs = "SELECT id FROM dataset", []
-            if class_id or images_type:
+            if kwargs:
                 ex += " WHERE"
-                if class_id:
-                    ex += " class_id = ?"
-                    ex_atrbs.append(class_id)
-                if images_type:
-                    ex += f"{" AND" if class_id else ""} type = ?"
-                    ex_atrbs.append(images_type)
+                for key, item in kwargs.items():
+                    ex += f"{" AND" if ex_atrbs else ""} {key} = ?"
+                    ex_atrbs.append(item)
             result = []
             for class_id in cur.execute(ex, tuple(ex_atrbs)).fetchall():
                 result.append(self.get_image(class_id[0]))
@@ -333,7 +333,7 @@ class Project(Dataset):
         for class_data in self.get_all_classes_conf():
             if class_data["id"] is not None and class_data["id"] not in [clasdat["class_id"] for clasdat in classes_conf]:
                 self.del_class_conf(class_data["id"])
-                for image in self.get_images(class_data["id"]):
+                for image in self.get_images(class_id=class_data["id"]):
                     self.del_image(image["id"])
         for class_data in classes_conf:
             self.add_or_upd_class_conf(**class_data)

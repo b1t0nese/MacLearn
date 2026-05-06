@@ -87,7 +87,7 @@ class YOLOdataset(Project):
         if not classes_config:
             classes_config = self.get_all_classes_conf(True)
         for i, clas in enumerate(classes_config):
-            class_images = self.get_images(clas["id"])
+            class_images = self.get_images(class_id=clas["id"])
             for image in class_images:
                 image_path = self.get_full_path("images", image["filename"])
                 class_path = self.get_full_path("dataset", "train" if not image["type"]=="validation" else "val", str(i))

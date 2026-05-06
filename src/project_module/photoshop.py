@@ -1,5 +1,6 @@
 import cv2
 from cv2.typing import MatLike
+import albumentations as AX
 import numpy as np
 import rembg
 
@@ -43,6 +44,65 @@ def visualize_bbox(img: MatLike, bboxes: list[list[int]], classes_colors: list[t
         cv2.rectangle(result, (x, y - label_size[1] - 5), (x + label_size[0] + 5, y),  classes_colors[class_id], -1)
         cv2.putText(result, str(class_id), (x + 2, y - 2), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
     return result
+
+
+
+def generate_augmentations(image_path, bboxes_xywh, category_ids, n=5):
+    image = cv2.imread(image_path)
+    results = []
+    for i in range(n):
+        h, w = image.shape[:2]
+
+        pipeline = AX.Compose([
+            AX.AtLeastOneBBoxRandomCrop(
+                height=np.random.randint(h//2, h),
+                width=np.random.randint(w//2, w), p=0.5),
+            AX.HorizontalFlip(p=0.3),
+            AX.VerticalFlip(p=0.2),
+            AX.RandomRotate90(p=0.3),
+            AX.ShiftScaleRotate(
+                shift_limit=np.random.uniform(0, 0.2),
+                scale_limit=np.random.uniform(0, 0.3),
+                rotate_limit=np.random.randint(10, 45), p=0.4),
+            AX.OneOf([
+                AX.RandomBrightnessContrast(
+                    brightness_limit=np.random.uniform(0.1, 0.3),
+                    contrast_limit=np.random.uniform(0.1, 0.3), p=1.0),
+                AX.HueSaturationValue(
+                    hue_shift_limit=np.random.randint(10, 30),
+                    sat_shift_limit=np.random.randint(10, 40),
+                    val_shift_limit=np.random.randint(10, 30), p=1.0),
+                AX.ColorJitter(
+                    brightness=np.random.uniform(0.1, 0.3),
+                    contrast=np.random.uniform(0.1, 0.3),
+                    saturation=np.random.uniform(0.1, 0.3),
+                    hue=np.random.uniform(0.05, 0.15), p=1.0),
+            ], p=0.5),
+            AX.OneOf([
+                AX.GaussNoise(p=1.0),
+                AX.ISONoise(
+                    color_shift=(0.01, 0.05),
+                    intensity=(0.1, 0.5),
+                    p=1.0),
+                AX.MultiplicativeNoise(
+                    multiplier=(0.9, 1.1), p=1.0),
+            ], p=0.3),
+            AX.OneOf([
+                AX.Blur(blur_limit=(3, 7), p=1.0),
+                AX.GaussianBlur(blur_limit=(3, 7), p=1.0),
+                AX.MedianBlur(blur_limit=7, p=1.0),
+            ], p=0.2),
+        ], bbox_params=AX.BboxParams(
+            format='coco', label_fields=['category_ids'],
+            min_visibility=0.2, clip=True, min_area=50))
+
+        augmented = pipeline(image=image, bboxes=bboxes_xywh, category_ids=category_ids)
+        results.append({
+            "image": augmented['image'],
+            "bboxes": augmented['bboxes'],
+            "category_ids": augmented['category_ids']
+        })
+    return results
 
 
 

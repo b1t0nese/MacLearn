@@ -128,7 +128,7 @@ class App:
                 cur_class_widget.add_object(subclas["search_query"], img_fullpath)
         pr_tab = self.windowUI.project_tab
         pr_tab.cb_validation_data.setChecked(project_conf["configuration"]["validation_data"])
-        pr_tab.cb_augmented_images.setChecked(project_conf["configuration"]["augmentation"])
+        pr_tab.spin_aug_count.setValue(project_conf["configuration"]["augmentation_count"])
         pr_tab.cb_annotation.setChecked(project_conf["configuration"]["annotation"])
         pr_tab.combo_dataset_format.setCurrentText(project_conf["configuration"]["dataset_format"])
         pr_tab.spin_images_per_class.setValue(project_conf["configuration"]["images_per_class"])
@@ -154,7 +154,7 @@ class App:
                     field.class_add_object.clicked.disconnect(); field.class_add_object.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_image_to_class(c_id, it))
 
-                for image in self.project_data.get_images(clas["id"], images_type):
+                for image in self.project_data.get_images(class_id=clas["id"], type=images_type):
                     object_widget = field.get_object(image["filename"])
                     image_data = self.project_data.get_full_path("images", image["filename"])
                     if image["annotation"]:
@@ -186,11 +186,11 @@ class App:
         log_window.log(f'Удаление изображений из класса id={class_id}, type={field_widget.class_name.text()}...\n')
         QApplication.processEvents()
         try:
-            all_images = self.project_data.get_images(class_id, field_widget.class_name.text()); total = len(all_images)
+            all_images = self.project_data.get_images(class_id=class_id, type=field_widget.class_name.text())
             for i, img in enumerate(all_images):
                 self.project_data.del_image(img["id"])
-                log_window.log(f'Удалено изображение {img["filename"]} {i+1}/{total}.')
-                log_window.set_progress(int((i + 1) / total * 100))
+                log_window.log(f'Удалено изображение {img["filename"]} {i+1}/{len(all_images)}.')
+                log_window.set_progress(int((i + 1) / len(all_images) * 100))
                 QApplication.processEvents()
             log_window.log(f'Успех: изображения удалены из класса id={class_id}, type={field_widget.class_name.text()}.', 1)
         except Exception as e:
@@ -208,7 +208,7 @@ class App:
         log_window.log(f'Экспорт изображений из класса id={class_id}, type={images_type} в "{dist_path}"...\n')
         QApplication.processEvents()
         os.makedirs(dist_path, exist_ok=True)
-        all_images = self.project_data.get_images(class_id, images_type); total = len(all_images)
+        all_images = self.project_data.get_images(class_id=class_id, type=images_type); total = len(all_images)
         try:
             for i, image_data in enumerate(all_images):
                 image_path = self.project_data.get_full_path("images", image_data["filename"])
@@ -289,7 +289,7 @@ class App:
         local_project_conf = {
             "configuration": {
                 "validation_data": pr_tab.cb_validation_data.isChecked(),
-                "augmentation": pr_tab.cb_augmented_images.isChecked(),
+                "augmentation_count": pr_tab.spin_aug_count.value(),
                 "annotation": pr_tab.cb_annotation.isChecked(),
                 "dataset_format": pr_tab.combo_dataset_format.currentText(),
                 "images_per_class": pr_tab.spin_images_per_class.value(),

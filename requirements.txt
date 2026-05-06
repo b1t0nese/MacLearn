@@ -1,6 +1,6 @@
 filetype
 numpy
-opencv_python
+opencv-python
 psutil
 PyQt6
 pywin32
@@ -13,3 +13,4 @@ undetected_chromedriver
 webdriver_manager
 onnxruntime
 standard_distutils
+AlbumentationsX
