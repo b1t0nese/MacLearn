@@ -108,7 +108,7 @@ class EmbeddedProgramWidget(QWidget):
                 win32gui.UpdateWindow(self.program_hwnd)
         except:
             self.update_timer.stop()
-            self.__init__(None)
+            self.__init__(self.process_name, self.process_pid)
             self.deleteLater()
 
 

@@ -160,7 +160,7 @@ class AutoDataset(QObject):
 
         self.downloaded_images_count = 0
         self.created_annotations_count = 0
-        self.processed_images_to_augment_count = 0
+        self.augmented_images_count = 0
 
         self.do_download_images = True
         self.do_annotation = True
@@ -190,7 +190,6 @@ class AutoDataset(QObject):
 
         self._stop_collector = False
         self._image_queue = queue.Queue()
-        self._counters_lock = thr_Lock()
         try:
             self.chrome_widget_lock.emit(True)
         except:
@@ -279,33 +278,20 @@ class AutoDataset(QObject):
         def downloader():
             nonlocal downloaded, num_images, num_val_images
             downloaded_images_count = downloaded
-
-            while True:
+            while not self._stop_collector:
                 try:
                     url = self._image_queue.get(timeout=1)
                 except queue.Empty:
-                    if self._stop_collector:
-                        break
                     continue
-                if url is None:
-                    break
-
-                with self._counters_lock:
-                    if num_images > 0:
-                        img_type = "default"
-                    elif num_val_images > 0:
-                        img_type = "validation"
-                    else:
-                        break
+                if num_images > 0: img_type = "default"
+                elif num_val_images > 0: img_type = "validation"
+                else: break
                 try:
-                    response = get_request(url)
+                    response = get_request(url, timeout=10)
                     if response.status_code == 200:
                         image_id = self.project_manager.save_image(response.content, class_id, img_type)
-                        with self._counters_lock:
-                            if img_type == "validation":
-                                num_val_images -= 1
-                            else:
-                                num_images -= 1
+                        if img_type == "validation": num_val_images -= 1
+                        else: num_images -= 1
                         downloaded_images_count += 1
                         self.downloaded_images_count += 1
                         image_data = self.project_manager.get_image(image_id)
@@ -316,15 +302,12 @@ class AutoDataset(QObject):
                             (self.project_manager.get_full_path("images", image_data["filename"]), np.array([])))
                 except Exception as e:
                     self.update_information((f"Ошибка при скачивании файла: {e}. src: {url}", 0))
-
-                with self._counters_lock:
-                    if num_images <= 0 and num_val_images <= 0:
-                        self._stop_collector = True
-                        break
+                if num_images <= 0 and num_val_images <= 0:
+                    self._stop_collector = True
 
         collector_thread = Thread(target=collector, daemon=True)
-        downloader_thread = Thread(target=downloader, daemon=True)
         collector_thread.start()
+        downloader_thread = Thread(target=downloader, daemon=True)
         downloader_thread.start()
 
         downloader_thread.join()
@@ -344,8 +327,8 @@ class AutoDataset(QObject):
                     img_counts = round(self.project_data["configuration"]["images_per_class"]/len(class_data["subclasses"]))
                     val_img_counts = (img_counts // 5) if self.project_data["configuration"]["validation_data"] else 0
                     must_img_counts, must_val_img_counts = img_counts, val_img_counts
-                    def_count, def_val_count = [round(len(self.project_manager.get_images(class_data["id"], dat_type))/len(class_data["subclasses"]))\
-                                                for dat_type in ["default", "validation"]]
+                    def_count, def_val_count = [round(len(self.project_manager.get_images(
+                        class_id=class_data["id"], type=dat_type))/len(class_data["subclasses"])) for dat_type in ["default", "validation"]]
                     img_counts -= def_count; val_img_counts -= def_val_count
                     img_counts, val_img_counts = (img_counts if img_counts>0 else 0), (val_img_counts if val_img_counts>0 else 0)
                     all_imgs = def_count+def_val_count; self.downloaded_images_count += all_imgs; self.update_information(
@@ -360,25 +343,26 @@ class AutoDataset(QObject):
         self.update_information(('Создание аннотаций...\n', 1))
         all_images = []
         for images_type in ["default", "validation"]:
-            all_images += self.project_manager.get_images(images_type=images_type)
+            all_images += self.project_manager.get_images(type=images_type)
         self.all_images_count = len(all_images)
         for i, image_data in enumerate(all_images):
             image_path = self.project_manager.get_full_path("images", image_data["filename"])
             image, new_img_data = open_image(image_path), None
-            if not image_data["annotation"] and self._is_running:
-                if image is not None and image.size > 0:
-                    object_detector = ImageAnnotationDetector(image)
-                    object_detector.remove_bg()
-                    object_detector.detect_contours()
-                    object_detector.smooth_contours()
-                    object_detector.filter_contours_to_needed()
-                    annotation_data = object_detector.calculate_bboxes_data()
-                    if annotation_data:
-                        bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
-                        new_img_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
-                    image = object_detector.put_contours_on_image(image)
-            elif self._is_running:
-                image = visualize_bbox(image, image_data["annotation"])
+            if self._is_running:
+                if not image_data["annotation"] and self._is_running:
+                    if image is not None and image.size > 0:
+                        object_detector = ImageAnnotationDetector(image)
+                        object_detector.remove_bg()
+                        object_detector.detect_contours()
+                        object_detector.smooth_contours()
+                        object_detector.filter_contours_to_needed()
+                        annotation_data = object_detector.calculate_bboxes_data()
+                        if annotation_data:
+                            bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
+                            new_img_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
+                        image = object_detector.put_contours_on_image(image)
+                else:
+                    image = visualize_bbox(image, image_data["annotation"])
             else:
                 break
             self.update_information(
@@ -388,6 +372,35 @@ class AutoDataset(QObject):
                     self.created_annotations_count, self.all_images_count)), cur_image=(image_path, image))
             self.created_annotations_count += 1
         self.update_information(('Готово! Аннотация создана.\n', 2))
+
+
+    def create_augmentation_data(self):
+        self.update_information(('Создание аугментированных данных...\n', 1))
+        all_images = self.project_manager.get_images(type="default")
+        for i, image_data in enumerate(all_images):
+            image_path = self.project_manager.get_full_path("images", image_data["filename"])
+            annotations = list(map(lambda x: x[1:], image_data["annotation"]))
+            category_ids = list(map(lambda x: x[0], image_data["annotation"]))
+            augmentations = self.project_manager.get_images(parent_image_id=image_data["id"], type="augment")
+            if not augmentations:
+                augmentations = generate_augmentations(image_path, annotations, category_ids,
+                                                    self.project_data["configuration"]["augmentation_count"])
+            for j, augmented in enumerate(augmentations):
+                if augmented.get("id") is None:
+                    bytes_image = cv2.imencode('.jpg', augmented["image"])[1].tobytes()
+                    annotation = [[int(cid), *map(int, ann)] for cid, ann in zip(augmented["category_ids"], augmented["bboxes"])]
+                    img_id = self.project_manager.save_image(bytes_image, image_data["class_id"], "augment", annotation, image_data["id"])
+                    augm_image_data = self.project_manager.get_image(img_id)
+                else:
+                    augm_image_data = augmented
+                preview_image_path = self.project_manager.get_full_path("images", augm_image_data.get("filename") or augmented.get("filename"))
+                preview_image = visualize_bbox(augmented.get("image") or open_image(preview_image_path), augm_image_data["annotation"])
+                self.update_information(
+                    (f"Аугментация №{j+1} для изображения №{i+1} {"уже была " if augmented.get("id") else ""}создана. {str(augm_image_data).strip("{}").replace("'", "")}", 0),
+                    stage_updated=("Create augmentation data", (self.augmented_images_count, self.need_augmented_images_count)),
+                    cur_image=(preview_image_path, preview_image))
+                self.augmented_images_count += 1
+        self.update_information(('Готово! Аугментированные данные созданы.\n', 2))
 
 
     def update_project_data(self):
@@ -403,15 +416,17 @@ class AutoDataset(QObject):
             if clear:
                 self.downloaded_images_count = 0
                 self.created_annotations_count = 0
-                self.processed_images_to_augment_count = 0
+                self.augmented_images_count = 0
             else:
                 self.downloaded_images_count = 0 or self.downloaded_images_count
                 self.created_annotations_count = 0 or self.created_annotations_count
-                self.processed_images_to_augment_count = 0 or self.processed_images_to_augment_count
+                self.augmented_images_count = 0 or self.augmented_images_count
             self.need_download_to_class = int(self.project_data["configuration"]["images_per_class"] *
-                                            (1.2 if self.project_data["configuration"]["validation_data"] else 1))
-            self.all_images_count = sum([
-                self.need_download_to_class for class_data in self.project_data["classes"] if class_data["enabled"]])
+                                              (1.2 if self.project_data["configuration"]["validation_data"] else 1))
+            self.all_images_count = sum([self.need_download_to_class for cl in self.project_data["classes"] if cl["enabled"]])
+            self.need_augmented_images_count = sum([self.project_data["configuration"]["images_per_class"]
+                                                    for cl in self.project_data["classes"] if cl["enabled"]])\
+                                                        * self.project_data["configuration"]["augmentation_count"]
 
         if self.do_download_images and self.driver:
             self.stage_updated.emit("Download images", (self.downloaded_images_count, self.all_images_count))
@@ -422,8 +437,8 @@ class AutoDataset(QObject):
                                                round(self.need_download_to_class/len(class_data["subclasses"])))
         if self.project_data["configuration"]["annotation"] and self.do_annotation:
             self.stage_updated.emit("Create annotation", (self.created_annotations_count, self.all_images_count))
-        if self.project_data["configuration"]["augmentation"] and self.do_augmentation:
-            self.stage_updated.emit("Create augmentation data", (self.processed_images_to_augment_count, self.all_images_count))
+        if self.project_data["configuration"]["augmentation_count"] and self.do_augmentation:
+            self.stage_updated.emit("Create augmentation data", (self.augmented_images_count, self.need_augmented_images_count))
 
 
     @pyqtSlot()
@@ -445,8 +460,8 @@ class AutoDataset(QObject):
             self.create_annotation_data()
         else:
             self.update_information(('INFO: Создание аннотации выключено.\n', 2))
-        if self.project_data["configuration"]["augmentation"] and self.do_augmentation:
-            pass #self.create_augmentation_data()
+        if self.project_data["configuration"]["augmentation_count"] and self.do_augmentation:
+            self.create_augmentation_data()
         else:
             self.update_information(('INFO: Создание аугментированных данных выключено.\n', 2))
 
