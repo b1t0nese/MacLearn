@@ -263,7 +263,7 @@ class Project(Dataset):
         if not self.get_configutation():
             self.save({
                 "validation_data": True,
-                "augmentation": False,
+                "augmentation_count": 0,
                 "annotation": True,
                 "dataset_format": "YOLO",
                 "images_per_class": 100,
