@@ -129,6 +129,7 @@ class AutoDataset(QObject):
                  chrome_version: int=None, chrome_headless: bool=False):
         super().__init__()
         self._is_running = False
+        self._stop_collector = True
         self._image_downloaded = True
 
         try:
@@ -287,7 +288,7 @@ class AutoDataset(QObject):
                 elif num_val_images > 0: img_type = "validation"
                 else: break
                 try:
-                    response = get_request(url, timeout=10)
+                    response = get_request(url, timeout=5)
                     if response.status_code == 200:
                         image_id = self.project_manager.save_image(response.content, class_id, img_type)
                         if img_type == "validation": num_val_images -= 1
@@ -320,7 +321,7 @@ class AutoDataset(QObject):
 
 
     def download_images_data(self):
-        self.update_information(('Установка изображений...\n', 1))
+        self.update_information(('Установка изображений...\n', 3))
         for class_data in self.project_data["classes"]:
             for subclass_data in class_data["subclasses"]:
                 if class_data["enabled"] and self._is_running:
@@ -336,48 +337,49 @@ class AutoDataset(QObject):
                         (subclass_data["search_query"], all_imgs, "", 0), ("Download images", (self.downloaded_images_count, self.all_images_count)))
                     if (img_counts or val_img_counts) and (def_count<must_img_counts or def_val_count<must_val_img_counts):
                         self.download_images(subclass_data, class_data["class_id"], img_counts, val_img_counts, all_imgs, must_img_counts+must_val_img_counts)
-        self.update_information(('Готово! Изображения скачаны.\n', 2))
+        self.update_information(('Готово! Изображения скачаны.', 1))
 
 
     def create_annotation_data(self):
-        self.update_information(('Создание аннотаций...\n', 1))
+        self.update_information(('Создание аннотаций...\n', 3))
         all_images = []
         for images_type in ["default", "validation"]:
             all_images += self.project_manager.get_images(type=images_type)
         self.all_images_count = len(all_images)
         for i, image_data in enumerate(all_images):
+            if not self._is_running:
+                break
             image_path = self.project_manager.get_full_path("images", image_data["filename"])
             image, new_img_data = open_image(image_path), None
-            if self._is_running:
-                if not image_data["annotation"] and self._is_running:
-                    if image is not None and image.size > 0:
-                        object_detector = ImageAnnotationDetector(image)
-                        object_detector.remove_bg()
-                        object_detector.detect_contours()
-                        object_detector.smooth_contours()
-                        object_detector.filter_contours_to_needed()
-                        annotation_data = object_detector.calculate_bboxes_data()
-                        if annotation_data:
-                            bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
-                            new_img_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
-                        image = object_detector.put_contours_on_image(image)
-                else:
-                    image = visualize_bbox(image, image_data["annotation"])
+            if not image_data["annotation"]:
+                if image is not None and image.size > 0:
+                    object_detector = ImageAnnotationDetector(image)
+                    object_detector.remove_bg()
+                    object_detector.detect_contours()
+                    object_detector.smooth_contours()
+                    object_detector.filter_contours_to_needed()
+                    annotation_data = object_detector.calculate_bboxes_data()
+                    if annotation_data:
+                        bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
+                        new_img_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
+                    image = object_detector.put_contours_on_image(image)
             else:
-                break
+                image = visualize_bbox(image, image_data["annotation"])
             self.update_information(
                 (f"Аннотация №{i+1} {"уже создана" if image_data["annotation"] else "создана"}. {
                     str(new_img_data or image_data).strip("{}").replace("'", "")}", 0),
                 stage_updated=("Create annotation", (
                     self.created_annotations_count, self.all_images_count)), cur_image=(image_path, image))
             self.created_annotations_count += 1
-        self.update_information(('Готово! Аннотация создана.\n', 2))
+        self.update_information(('Готово! Аннотация создана.', 1))
 
 
     def create_augmentation_data(self):
-        self.update_information(('Создание аугментированных данных...\n', 1))
+        self.update_information(('Создание аугментированных данных...\n', 3))
         all_images = self.project_manager.get_images(type="default")
         for i, image_data in enumerate(all_images):
+            if not self._is_running:
+                break
             image_path = self.project_manager.get_full_path("images", image_data["filename"])
             annotations = list(map(lambda x: x[1:], image_data["annotation"]))
             category_ids = list(map(lambda x: x[0], image_data["annotation"]))
@@ -394,13 +396,14 @@ class AutoDataset(QObject):
                 else:
                     augm_image_data = augmented
                 preview_image_path = self.project_manager.get_full_path("images", augm_image_data.get("filename") or augmented.get("filename"))
-                preview_image = visualize_bbox(augmented.get("image") or open_image(preview_image_path), augm_image_data["annotation"])
+                preview_image = visualize_bbox(augmented.get("image", open_image(preview_image_path)), augm_image_data["annotation"])
                 self.update_information(
-                    (f"Аугментация №{j+1} для изображения №{i+1} {"уже была " if augmented.get("id") else ""}создана. {str(augm_image_data).strip("{}").replace("'", "")}", 0),
+                    (f"""Аугментация №{j+1} для изображения №{i+1} {"уже была " if augmented.get("id") else ""}создана. {
+                        str(augm_image_data).strip("{}").replace("'", "")}""", 0),
                     stage_updated=("Create augmentation data", (self.augmented_images_count, self.need_augmented_images_count)),
                     cur_image=(preview_image_path, preview_image))
                 self.augmented_images_count += 1
-        self.update_information(('Готово! Аугментированные данные созданы.\n', 2))
+        self.update_information(('Готово! Аугментированные данные созданы.', 1))
 
 
     def update_project_data(self):
@@ -455,22 +458,22 @@ class AutoDataset(QObject):
             self.download_images_data()
         else:
             self.update_information((f'''INFO: Установка изображений выключена{
-                ", Chrome не инициализировался" if not self.driver else ""}.\n''', 2))
+                ", Chrome не инициализировался" if not self.driver else ""}.''', 2))
         if self.project_data["configuration"]["annotation"] and self.do_annotation:
             self.create_annotation_data()
         else:
-            self.update_information(('INFO: Создание аннотации выключено.\n', 2))
+            self.update_information(('INFO: Создание аннотации выключено.', 2))
         if self.project_data["configuration"]["augmentation_count"] and self.do_augmentation:
             self.create_augmentation_data()
         else:
-            self.update_information(('INFO: Создание аугментированных данных выключено.\n', 2))
+            self.update_information(('INFO: Создание аугментированных данных выключено.', 2))
 
         if not self._is_running:
-            self.update_information(('Работа остановлена\n\n\n', 2))
+            self.update_information(('Работа остановлена\n\n\n', 3))
         else:
-            self.update_information(('Работа окончена, данные готовы.\n\n\n', 2))
+            self.update_information(('Работа окончена, данные готовы.\n\n\n', 3))
 
-        self._is_running = False
+        self._is_running, self._stop_collector = False, False
         if self.always_switch_to_main_window_thread:
             self.always_switch_to_main_window_thread.join()
         self.finished.emit()
@@ -478,5 +481,5 @@ class AutoDataset(QObject):
 
     @pyqtSlot()
     def stop(self):
-        self._is_running = False
+        self._is_running, self._stop_collector = False, True
         self.update_information(("Работа скоро остановится, пожалуйста не закрывайте это окно.\n", 1))
