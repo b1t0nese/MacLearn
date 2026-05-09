@@ -365,12 +365,12 @@ class AutoDataset(QObject):
                     image = object_detector.put_contours_on_image(image)
             else:
                 image = visualize_bbox(image, image_data["annotation"])
+            self.created_annotations_count += 1
             self.update_information(
                 (f"Аннотация №{i+1} {"уже создана" if image_data["annotation"] else "создана"}. {
                     str(new_img_data or image_data).strip("{}").replace("'", "")}", 0),
                 stage_updated=("Create annotation", (
                     self.created_annotations_count, self.all_images_count)), cur_image=(image_path, image))
-            self.created_annotations_count += 1
         self.update_information(('Готово! Аннотация создана.', 1))
 
 
@@ -397,12 +397,12 @@ class AutoDataset(QObject):
                     augm_image_data = augmented
                 preview_image_path = self.project_manager.get_full_path("images", augm_image_data.get("filename") or augmented.get("filename"))
                 preview_image = visualize_bbox(augmented.get("image", open_image(preview_image_path)), augm_image_data["annotation"])
+                self.augmented_images_count += 1
                 self.update_information(
                     (f"""Аугментация №{j+1} для изображения №{i+1} {"уже была " if augmented.get("id") else ""}создана. {
                         str(augm_image_data).strip("{}").replace("'", "")}""", 0),
                     stage_updated=("Create augmentation data", (self.augmented_images_count, self.need_augmented_images_count)),
                     cur_image=(preview_image_path, preview_image))
-                self.augmented_images_count += 1
         self.update_information(('Готово! Аугментированные данные созданы.', 1))
 
 
