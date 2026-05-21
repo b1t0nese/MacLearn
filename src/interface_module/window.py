@@ -20,6 +20,79 @@ uis_path = os.path.join(base_path, "uis")
 
 
 
+class InformationWidget(QWidget):
+    def __init__(self, title: str, parent=None):
+        super().__init__(parent)
+        ui_file = os.path.join(uis_path, "widgets", "information.ui")
+        self.ui = uic.loadUi(ui_file, self)
+        self.ui.label_title.setText(title)
+        self.table = self.ui.table_info
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+    def add_information(self, data: dict):
+        self.table.setRowCount(len(data))
+        for row, (key, value) in enumerate(data.items()):
+            if isinstance(value, bool):
+                value = "✅ Да" if value else "❌ Нет"
+            elif value is None:
+                value = "—"
+            else:
+                value = str(value)
+            key_item = QTableWidgetItem(str(key))
+            value_item = QTableWidgetItem(value)
+            key_item.setFlags(key_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.table.setItem(row, 0, key_item)
+            self.table.setItem(row, 1, value_item)
+        self._adjust_table_height()
+
+    def _adjust_table_height(self):
+        if self.table.rowCount() == 0:
+            return
+        header_height = self.table.horizontalHeader().height()
+        rows_height = sum([self.table.rowHeight(row) for row in range(self.table.rowCount())])
+        horizontal_header_height = 0
+        if self.table.horizontalHeader().isVisible():
+            horizontal_header_height = self.table.horizontalHeader().height()
+        total_height = header_height + rows_height + horizontal_header_height + 10
+        self.table.setMinimumHeight(total_height)
+        self.table.setMaximumHeight(total_height)
+        self.updateGeometry()
+
+    def clear(self):
+        self.table.setRowCount(0)
+        self.table.setMinimumHeight(0)
+        self.table.setMaximumHeight(16777215)
+
+
+class StatisticsWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        ui_file = os.path.join(uis_path, "statisticswindow.ui")
+        self.ui = uic.loadUi(ui_file, self)
+        self.stats_layout = self.ui.stats_layout
+        self.ui.btn_close.clicked.connect(self.close)
+        self.widgets = []
+
+    def add_information(self, title: str, information: dict):
+        widget = InformationWidget(title, self)
+        widget.add_information(information)
+        self.stats_layout.addWidget(widget)
+        self.widgets.append(widget)
+
+    def add_information_batch(self, data: dict):
+        for title, info in data.items():
+            self.add_information(title, info)
+
+    def clear_all(self):
+        for widget in self.widgets:
+            widget.deleteLater()
+        self.widgets.clear()
+
+
+
 class ObjectCardWidget(QWidget):
     def __init__(self):
         super().__init__()

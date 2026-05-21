@@ -14,20 +14,42 @@
    <item>
     <layout class="QHBoxLayout" name="header_layout">
      <item>
-      <widget class="QLabel" name="label_title">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">font-size: 18px; font-weight: bold; padding: 10px;</string>
-       </property>
-       <property name="text">
-        <string>Датасет</string>
-       </property>
-      </widget>
+     <widget class="QPushButton" name="label_title">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">
+QPushButton {
+    font-size: 18px; 
+    font-weight: bold; 
+    padding: 10px;
+    border: none;
+    background-color: transparent;
+    color: palette(text);
+}
+QPushButton:hover {
+    color: palette(highlight);
+    text-decoration: underline;
+}
+QPushButton:pressed {
+    color: palette(dark);
+}
+       </string>
+      </property>
+      <property name="text">
+       <string>Датасет</string>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="cursor">
+       <cursorShape>PointingHandCursor</cursorShape>
+      </property>
+     </widget>
      </item>
      <item>
       <widget class="QTabBar" name="tab_bar">

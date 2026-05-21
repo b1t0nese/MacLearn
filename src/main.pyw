@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtCore import QThread, QUrl
+from plyer import notification
 import qdarkstyle
 import subprocess
 import argparse
@@ -8,33 +9,28 @@ import shutil
 import sys
 import os
 
-from project_module.project_manager import Project
+from project_module.project_manager import Project, get_dataset_statistics
 from project_module.autodataset import AutoDataset
 from project_module.dataset_manager import AVAILABLE_FORMATS
-from interface_module.window import MainWindowUI
+from interface_module.window import MainWindowUI, StatisticsWindow
 from interface_module.logs_window import LogsUI
 from project_module.photoshop import visualize_bbox, open_image
-
-
+import heartrate
+heartrate.trace(browser=True, daemon=True)
 
 def launch_new_instance():
     if getattr(sys, 'frozen', False):
         executable, args = sys.argv[0], sys.argv[1:]
     else:
         executable, args = sys.executable, sys.argv
-    if sys.platform == 'win32':
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        startupinfo.wShowWindow = subprocess.SW_HIDE
-        subprocess.Popen(
-            [executable] + args,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
-            startupinfo=startupinfo, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, close_fds=True)
-    else:
-        subprocess.Popen(
-            [executable] + args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, close_fds=True, start_new_session=True)
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = subprocess.SW_HIDE
+    subprocess.Popen(
+        [executable] + args,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+        startupinfo=startupinfo, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL, close_fds=True)
 
 
 
@@ -45,6 +41,7 @@ class App:
         self.autodataset_thread: QThread = None
         self.appApplication: QApplication = None
         self.windowUI: MainWindowUI = None
+        self.statistics_window: StatisticsWindow = None
         self.open_project(self.config["project_path"])
 
 
@@ -65,8 +62,11 @@ class App:
         if self.autodataset_worker:
             self.delete_autodataset_thread()
             self.autodataset_worker.close()
-        if self.appApplication and self.windowUI:
+        if self.windowUI:
             self.windowUI.close()
+        if self.statistics_window:
+            self.statistics_window.close()
+        if self.appApplication:
             self.appApplication.quit()
         if event:
             if hasattr(self.windowUI, 'original_close_event'):
@@ -101,6 +101,7 @@ class App:
         self.windowUI.setWindowTitle(f'{self.windowUI.windowTitle()} ("{self.project_data.project_path}")')
         self.windowUI.project_tab.combo_dataset_format.addItems(AVAILABLE_FORMATS.keys())
         self.windowUI.project_tab.btn_save_project.clicked.connect(self.save_project)
+        self.windowUI.dataset_tab.label_title.clicked.connect(self.open_dataset_information)
         self.windowUI.dataset_tab.btn_update_dataset.clicked.connect(self.update_dataset_view_in_window)
         self.windowUI.dataset_tab.btn_export_dataset.clicked.connect(self.export_dataset_data)
         self.windowUI.autodataset_tab.work_tab.btn_start.clicked.connect(self.toggle_autodataset_work)
@@ -157,7 +158,7 @@ class App:
                 for image in self.project_data.get_images(class_id=clas["id"], type=images_type):
                     object_widget = field.get_object(image["filename"])
                     image_data = self.project_data.get_full_path("images", image["filename"])
-                    if image["annotation"]:
+                    if image["annotation"] and ((object_widget and object_widget.annotation_data != image["annotation"]) or not object_widget):
                         image_data = visualize_bbox(open_image(image_data), image["annotation"])
                     if not object_widget:
                         object_widget = field.add_object(image["filename"], image_data, False, lambda e: None)
@@ -167,6 +168,7 @@ class App:
                         object_widget.image_data = image.copy()
                     elif object_widget.image_data != image:
                         object_widget.update_object_image(image_data)
+                    object_widget.annotation_data = image["annotation"]
 
                 field.show_class(clas["enabled"])
         self.windowUI.dataset_update_all_class_layouts()
@@ -349,6 +351,12 @@ class App:
         if not success:
             QMessageBox.warning(self.windowUI, "Ошибка", message)
 
+    def open_dataset_information(self):
+        dataset_information = get_dataset_statistics(self.project_data)
+        self.statistics_window = StatisticsWindow()
+        self.statistics_window.add_information_batch(dataset_information)
+        self.statistics_window.show()
+
 
     def toggle_autodataset_work(self):
         if self.autodataset_thread and self.autodataset_thread.isRunning():
@@ -412,6 +420,7 @@ class App:
     def on_autodataset_finished(self):
         self.delete_autodataset_thread()
         self.windowUI.set_btn_start_autodataset_state(False)
+        notification.notify(message='Автодатасет закончил свою работу. Датасет готов к использованию.', app_name='MacLearn', title='MacLearn автодатасет')
 
     def stop_autodataset(self):
         if self.autodataset_worker:
