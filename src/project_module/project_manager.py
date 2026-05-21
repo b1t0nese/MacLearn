@@ -1,4 +1,5 @@
 from pathlib import Path
+import numpy as np
 import shutil
 import json
 import os
@@ -6,6 +7,8 @@ import re
 import sqlite3
 import filetype
 import uuid
+
+from .photoshop import open_image
 
 
 
@@ -385,3 +388,126 @@ class Project(Dataset):
                     _traverse(item)
         _traverse(data)
         return results
+
+
+
+def get_dataset_statistics(project: Project) -> dict:
+    stats = {
+        "Общая информация": {},
+        "Изображения": {},
+        "Аннотации": {},
+        "Классы": {},
+        "Качество и свойства": {},
+        "Конфигурация проекта": {}
+    }
+    project_conf = project.get_project_conf()
+    configuration = project_conf["configuration"]
+    classes = project_conf["classes"]
+    all_images = project.get_images()
+    total_images = len(all_images)
+    stats["Общая информация"] = {
+        "Путь проекта": project.project_path,
+        "Версия структуры": "1.0",
+        "Наличие example_images": bool(project.get_full_path("example_images")),
+        "Размер БД (МБ)": round(os.path.getsize(project.database_path) / (1024 * 1024), 2) if os.path.exists(project.database_path) else 0
+    }
+    total_size_bytes = 0
+    resolutions = []
+    formats = set()
+
+    for img in all_images:
+        img_path = os.path.join(project.images_path, img["filename"])
+        if os.path.exists(img_path):
+            size = os.path.getsize(img_path)
+            total_size_bytes += size
+            try:
+                mat_image = open_image(img_path)
+                resolutions.append(mat_image.shape[:2][::-1])
+                formats.add(mat_image.format)
+            except:
+                ext = os.path.splitext(img["filename"])[1].lower()
+                formats.add(ext)
+
+    avg_width = sum(r[0] for r in resolutions) // len(resolutions) if resolutions else 0
+    avg_height = sum(r[1] for r in resolutions) // len(resolutions) if resolutions else 0
+    stats["Изображения"] = {
+        "Всего изображений": total_images,
+        "Общий размер (МБ)": round(total_size_bytes / (1024 * 1024), 2),
+        "Средний размер файла (КБ)": round((total_size_bytes / total_images) / 1024, 2) if total_images > 0 else 0,
+        "Форматы изображений": list(formats) if formats else ["не определено"],
+        "Среднее разрешение": f"{avg_width}x{avg_height}" if resolutions else "не определено",
+        "Пустые изображения (без аннотаций)": len([img for img in all_images if not img["annotation"] or img["annotation"] == "[]"]),
+        "Типы изображений": list(set(img["type"] for img in all_images))
+    }
+    total_annotations = 0
+    annotations_per_image = []
+    all_annotations_raw = []
+    
+    for img in all_images:
+        annotation = img["annotation"]
+        if annotation and isinstance(annotation, (list, dict)):
+            if isinstance(annotation, list):
+                ann_count = len(annotation)
+            elif isinstance(annotation, dict):
+                ann_count = len(annotation.get("annotations", annotation.get("boxes", [])))
+            else:
+                ann_count = 0
+            total_annotations += ann_count
+            annotations_per_image.append(ann_count)
+            all_annotations_raw.append(annotation)
+    stats["Аннотации"] = {
+        "Всего аннотаций": total_annotations,
+        "Среднее аннотаций на изображение": round(total_annotations / total_images, 2) if total_images > 0 else 0,
+        "Максимум аннотаций на изображение": max(annotations_per_image) if annotations_per_image else 0,
+        "Минимум аннотаций на изображение": min(annotations_per_image) if annotations_per_image else 0,
+        "Медиана аннотаций на изображение": sorted(annotations_per_image)[len(annotations_per_image)//2] if annotations_per_image else 0,
+        "Изображения с аннотациями": len([c for c in annotations_per_image if c > 0]),
+        "Изображения без аннотаций": len([c for c in annotations_per_image if c == 0])
+    }
+
+    class_stats = {}
+    for cls in classes:
+        class_id = cls["class_id"]
+        class_name = cls["class_name"]
+        images_in_class = project.get_images(class_id=class_id)
+        class_stats[class_name] = {
+            "id": class_id,
+            "включен": cls["enabled"],
+            "количество изображений": len(images_in_class),
+            "количество подклассов": len(cls.get("subclasses", [])),
+            "подклассы": [sc.get("search_query", sc.get("class_name", "unnamed")) for sc in cls.get("subclasses", [])]
+        }
+
+    class_counts = [stats["количество изображений"] for stats in class_stats.values()]
+    stats["Классы"] = {
+        "Всего классов": len(classes),
+        "Всего подклассов": sum(len(cls.get("subclasses", [])) for cls in classes),
+        "Включенных классов": len([c for c in class_stats.values() if c["включен"]]),
+        "Детали по классам": class_stats,
+        "Максимум изображений в классе": max(class_counts) if class_counts else 0,
+        "Минимум изображений в классе": min(class_counts) if class_counts else 0,
+        "Среднее изображений на класс": round(sum(class_counts) / len(class_counts), 2) if class_counts else 0,
+        "Баланс классов (коэффициент вариации)": round((max(class_counts) - min(class_counts)) / (sum(class_counts) / len(class_counts)), 2) if class_counts and sum(class_counts) > 0 else 0
+    }
+
+    example_images_path = project.get_full_path("example_images")
+    example_images = []
+    if example_images_path and os.path.exists(example_images_path):
+        example_images = [f for f in os.listdir(example_images_path) if os.path.isfile(os.path.join(example_images_path, f))]
+    stats["Качество и свойства"] = {
+        "Примерных изображений (подклассов)": len(example_images),
+        "Есть родительские изображения (производные)": len([img for img in all_images if img.get("parent_image_id")]),
+        "Производные изображения (увеличение)": len([img for img in all_images if img.get("type") and img["type"] != "DEFAULT"]),
+        "Соотношение типов изображений": dict(zip(*np.unique([img["type"] for img in all_images], return_counts=True))) if all_images else {},
+        "Целостность данных": "OK" if all(os.path.exists(os.path.join(project.images_path, img["filename"])) for img in all_images) else "Некоторые файлы отсутствуют"
+    }
+    stats["Конфигурация проекта"] = {
+        "Формат датасета": configuration.get("dataset_format", "не задан"),
+        "Увеличение данных (аугментация)": f"{configuration.get('augmentation_count', 0)}x",
+        "Валидация данных": configuration.get("validation_data", False),
+        "Аннотации включены": configuration.get("annotation", False),
+        "Изображений на класс": configuration.get("images_per_class", 0),
+        "Размер изображений": configuration.get("images_size", "не задан")
+    }
+    
+    return stats
