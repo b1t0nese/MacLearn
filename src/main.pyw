@@ -15,8 +15,8 @@ from project_module.dataset_manager import AVAILABLE_FORMATS
 from interface_module.window import MainWindowUI, StatisticsWindow
 from interface_module.logs_window import LogsUI
 from project_module.photoshop import visualize_bbox, open_image
-import heartrate
-heartrate.trace(browser=True, daemon=True)
+
+
 
 def launch_new_instance():
     if getattr(sys, 'frozen', False):
