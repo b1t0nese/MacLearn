@@ -9,10 +9,9 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from undetected_chromedriver import Chrome, ChromeOptions
 from requests import get as get_request
-from threading import Thread, Lock as thr_Lock
+from threading import Thread
 from platform import system as platf_system
 from time import sleep, time as ntime
-import subprocess
 import numpy as np
 import queue
 import cv2
@@ -27,10 +26,7 @@ class ClipboardManager:
     def __init__(self):
         self.system = platf_system().lower()
         self._win32clipboard, self._tempfile = None, None
-        if self.system=="windows":
-            self._import_windows_libs()
-        elif self.system=="linux":
-            self._check_linux_deps()
+        self._import_windows_libs()
 
     def _import_windows_libs(self):
         if self._win32clipboard is None:
@@ -39,23 +35,6 @@ class ClipboardManager:
                 self._win32clipboard = win32clipboard
             except ImportError:
                 raise ImportError("Для работы с буфером обмена в Windows установите pywin32: pip install pywin32")
-
-    def _check_linux_deps(self):
-        if not self._check_command_exists("xclip"):
-            raise RuntimeError("Установите xclip для работы с буфером обмена.")
-        import tempfile
-        self._tempfile = tempfile
-
-    def _check_command_exists(self, command):
-        try:
-            subprocess.run([command, "-version"], 
-                            stdout=subprocess.DEVNULL, 
-                            stderr=subprocess.DEVNULL,
-                            check=True)
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return False
-
 
     def copy_image_to_clipboard(self, image: str | np.ndarray):
         if isinstance(image, str):
@@ -66,8 +45,6 @@ class ClipboardManager:
         if image is not None and image.size > 0:
             if self.system == "windows":
                 self._copy_windows(image)
-            elif self.system == "linux":
-                self._copy_linux(image)
             else:
                 raise NotImplementedError(f"System {self.system} not supported")
 
@@ -80,27 +57,6 @@ class ClipboardManager:
             self._win32clipboard.EmptyClipboard()
             self._win32clipboard.SetClipboardData(self._win32clipboard.CF_DIB, bmp_data.tobytes()[14:])
             self._win32clipboard.CloseClipboard()
-
-    def _copy_linux(self, image):
-        if not self._check_linux_deps():
-            raise RuntimeError("xclip not found. Install with: sudo apt-get install xclip")
-        success, png_data = cv2.imencode('.png', image)
-        if not success:
-            raise RuntimeError("Failed to encode image to PNG")
-        with self._tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-            tmp_path = tmp_file.name
-            tmp_file.write(png_data.tobytes())
-        try:
-            result = subprocess.run([
-                "xclip", "-selection", "clipboard", 
-                "-t", "image/png", 
-                "-i", tmp_path
-            ], capture_output=True, text=True)
-            if result.returncode != 0:
-                raise RuntimeError(f"xclip error: {result.stderr}")
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
 
 
 
