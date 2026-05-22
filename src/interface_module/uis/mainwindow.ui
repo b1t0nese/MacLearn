@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1200</width>
+    <width>1350</width>
     <height>900</height>
    </rect>
   </property>
@@ -34,8 +34,10 @@
         <string>Файл</string>
        </property>
        <addaction name="actionOpen"/>
+       <addaction name="actionOpen_As_Dir"/>
        <addaction name="actionSave"/>
        <addaction name="actionSave_As"/>
+       <addaction name="actionSave_As_Dir"/>
        <addaction name="separator"/>
        <addaction name="actionExport"/>
        <addaction name="actionExport_As"/>
@@ -76,6 +78,11 @@
     <string>Открыть</string>
    </property>
   </action>
+  <action name="actionOpen_As_Dir">
+   <property name="text">
+    <string>Открыть как папку</string>
+   </property>
+  </action>
   <action name="actionSave">
    <property name="text">
     <string>Сохранить</string>
@@ -84,6 +91,11 @@
   <action name="actionSave_As">
    <property name="text">
     <string>Сохранить как...</string>
+   </property>
+  </action>
+  <action name="actionSave_As_Dir">
+   <property name="text">
+    <string>Сохранить как папку...</string>
    </property>
   </action>
   <action name="actionExport">

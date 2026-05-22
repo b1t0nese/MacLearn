@@ -75,7 +75,6 @@ class App:
                 event.accept()
         sys.exit(exit_code)
 
-
     def new_window(self, project_path: str):
         if self.autodataset_worker:
             try:
@@ -109,8 +108,10 @@ class App:
         at.showEvent = lambda e: [at.orgShowEvent(e), self.autodataset_worker.update_all_information()][0]
 
         self.windowUI.actionOpen.triggered.connect(self.open_project)
+        self.windowUI.actionOpen_As_Dir.triggered.connect(self.open_project_as_dir)
         self.windowUI.actionSave.triggered.connect(self.save_project)
         self.windowUI.actionSave_As.triggered.connect(self.save_project_as)
+        self.windowUI.actionSave_As_Dir.triggered.connect(self.save_project_as_dir)
         self.windowUI.actionExport.triggered.connect(lambda e: self.export_dataset_data(e, get_path=False))
         self.windowUI.actionExport_As.triggered.connect(self.export_dataset_data)
         self.windowUI.actionRestart.triggered.connect(lambda e: self.open_project(self.project_data.project_path))
@@ -169,6 +170,7 @@ class App:
                     elif object_widget.image_data != image:
                         object_widget.update_object_image(image_data)
                     object_widget.annotation_data = image["annotation"]
+                    QApplication.processEvents()
 
                 field.show_class(clas["enabled"])
         self.windowUI.dataset_update_all_class_layouts()
@@ -258,10 +260,21 @@ class App:
             log_window.wait_while_not_exit()
             self.update_dataset_view_in_window()
 
+    def open_dataset_information(self):
+        dataset_information = get_dataset_statistics(self.project_data)
+        self.statistics_window = StatisticsWindow()
+        self.statistics_window.add_information_batch(dataset_information)
+        self.statistics_window.show()
+
+
+    def open_project_as_dir(self) -> bool:
+        project_path = QFileDialog.getExistingDirectory(None, "Выберите папку проекта", "")
+        if project_path:
+            return self.open_project(project_path)
+
     def open_project(self, project_path: str=None) -> bool:
         if not project_path:
-            project_path = QFileDialog.getExistingDirectory(
-                None, "Выберите папку проекта", "")
+            project_path, _ = QFileDialog.getOpenFileName(self.windowUI, "Открыть проект", "", "MacLearn Project (*.maclproj)")
         if project_path:
             if self.windowUI:
                 self.windowUI.close()
@@ -316,6 +329,25 @@ class App:
         self.windowUI.autodataset_update_statuses()
 
     def save_project_as(self):
+        new_project_path, ok = QFileDialog.getSaveFileName(
+            self.windowUI, "Сохранить проект как", "", "MacLearn Project (*.maclproj)")
+        if not ok or not new_project_path:
+            return
+        if not new_project_path.endswith('.maclproj'):
+            new_project_path += '.maclproj'
+        status, message = self.project_data.save_as(new_project_path)
+        if status:
+            QMessageBox.information(self.windowUI, "Успех", message)
+            reply = QMessageBox.question(
+                self.windowUI, "Перезапуск в новом проекте",
+                f'Перезапустить окно в новом проекте "{new_project_path}"?.',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
+                self.open_project(new_project_path)
+        else:
+            QMessageBox.warning(self.windowUI, "Ошибка", message)
+
+    def save_project_as_dir(self):
         new_project_path = QFileDialog.getExistingDirectory(self.windowUI, "Выберите папку для сохранения")
         if new_project_path:
             status, message = self.project_data.save_as(new_project_path)
@@ -331,31 +363,26 @@ class App:
                 QMessageBox.warning(self.windowUI, "Ошибка", message)
 
     def export_dataset_data(self, e=None, get_path=True):
+        dataset_path = None
         if get_path:
-            dataset_path = QFileDialog.getExistingDirectory(None, "Выберите куда разместить датасет (можно пропустить закрыв окно).", "")
-        else:
-            dataset_path = None
+            dataset_path = QFileDialog.getExistingDirectory(None, "Выберите куда разместить датасет.", "")
+            if not dataset_path:
+                return
         choiced_format = self.project_data.get_configutation()["dataset_format"]
         DatasetManager = AVAILABLE_FORMATS[choiced_format]
         dataset_manager = DatasetManager.from_project(self.project_data)
         success, message = dataset_manager.export()
         if success:
             QMessageBox.information(self.windowUI, "Успех" if success else "Неудача", message)
-            if dataset_path:
-                success, message = dataset_manager.put_data(dataset_path)
-                if success:
-                    QMessageBox.information(self.windowUI, "Успех", message)
-            else:
-                dataset_path = dataset_manager.get_full_path("dataset")
+            if not dataset_path:
+                dataset_path = dataset_manager.get_dataset_path()
+            success, message = dataset_manager.put_data(dataset_path)
+            if success:
+                QMessageBox.information(self.windowUI, "Успех", message)
             QDesktopServices.openUrl(QUrl.fromLocalFile(dataset_path))
         if not success:
             QMessageBox.warning(self.windowUI, "Ошибка", message)
-
-    def open_dataset_information(self):
-        dataset_information = get_dataset_statistics(self.project_data)
-        self.statistics_window = StatisticsWindow()
-        self.statistics_window.add_information_batch(dataset_information)
-        self.statistics_window.show()
+        dataset_manager.clear()
 
 
     def toggle_autodataset_work(self):
@@ -434,8 +461,8 @@ def main():
     arg_parser = argparse.ArgumentParser(
         "MacLearn", description="A program that will automatically assemble a "+
         "high-quality dataset of thousands of images for you in a matter of minutes.")
-    arg_parser.add_argument("--project-path", type=str, default=None,
-                            help="path of your MacLearn project (skip this to choice project from explorer)")
+    arg_parser.add_argument("project_path", nargs='?', default=None,
+                            help="path of your MacLearn project (skip this to choose project from explorer)")
     arg_parser.add_argument("--chrome-version", type=int, default=None,
                             help="version of Chrome installed on your computer (you can skip this, if the program is working fine)")
     arg_parser.add_argument("--chromedriver-path", type=str, default=None,
