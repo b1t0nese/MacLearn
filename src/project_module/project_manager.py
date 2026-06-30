@@ -176,10 +176,10 @@ class Dataset:
                 result.append(class_data)
             return result
 
-    def get_classes_ids_numbers(self) -> dict[int, int]:
+    def get_classes_ids_numbers(self, rev: bool=False) -> dict[int, int]:
         classes_conf = self.get_all_classes_conf()
         classes_ids = sorted(map(lambda x: x["class_id"], classes_conf))
-        return dict([(x, i) for i, x in enumerate(classes_ids)])
+        return dict([((i, x) if rev else (x, i)) for i, x in enumerate(classes_ids)])
 
 
     def save_image(self, image_bytes: bytes, class_id: int, image_type: str = "default",
@@ -454,6 +454,33 @@ class Project(Dataset):
             "configuration": self.get_configutation(),
             "classes": self.get_all_classes_conf()
         }
+
+
+
+class SerialDataset(Project):
+    def __init__(self, path):
+        super().__init__(path)
+        self.class_id, self.image_id = 0, 0
+
+    def set_position(self, class_id=None, image_id=None):
+        self.class_id, self.image_id = class_id or self.class_id, image_id or self.image_id
+
+    def next(self):
+        self.image_id += 1
+        classes_ids = self.get_classes_ids_numbers(True)
+        images_count = len(self.get_images(class_id=classes_ids[self.class_id]))
+        if self.image_id>=images_count:
+            self.class_id += 1
+            self.image_id = 0
+            if self.class_id>=len(classes_ids):
+                self.class_id = 0
+
+    def add_image(self, image_bytes: bytes, call_func: function=None) -> int:
+        new_image_data = self.save_image(image_bytes, self.get_classes_ids_numbers(True)[self.class_id])
+        self.next()
+        if call_func is not None:
+            return call_func(new_image_data)
+        return new_image_data
 
 
 

@@ -1,9 +1,7 @@
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtCore import QThread, QUrl
-from plyer import notification
 import qdarkstyle
-import subprocess
 import argparse
 import shutil
 import sys
@@ -15,22 +13,7 @@ from project_module.dataset_manager import AVAILABLE_FORMATS
 from interface_module.window import MainWindowUI, StatisticsWindow
 from interface_module.logs_window import LogsUI
 from project_module.photoshop import visualize_bbox, open_image
-
-
-
-def launch_new_instance():
-    if getattr(sys, 'frozen', False):
-        executable, args = sys.argv[0], sys.argv[1:]
-    else:
-        executable, args = sys.executable, sys.argv
-    startupinfo = subprocess.STARTUPINFO()
-    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    startupinfo.wShowWindow = subprocess.SW_HIDE
-    subprocess.Popen(
-        [executable] + args,
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
-        startupinfo=startupinfo, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL, close_fds=True)
+from pcfuncs import *
 
 
 
@@ -274,7 +257,9 @@ class App:
 
     def open_project(self, project_path: str=None) -> bool:
         if not project_path:
-            project_path, _ = QFileDialog.getOpenFileName(self.windowUI, "Открыть проект", "", "MacLearn Project (*.maclproj)")
+            project_path, _ = QFileDialog.getSaveFileName(
+                self.windowUI, "Открыть или создать проект (введите название файла, если хотите создать новый)",
+                "", "MacLearn Project (*.maclproj)", options=QFileDialog.Option.DontConfirmOverwrite)
         if project_path:
             if self.windowUI:
                 self.windowUI.close()

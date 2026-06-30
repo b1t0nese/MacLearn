@@ -10,53 +10,14 @@ from webdriver_manager.chrome import ChromeDriverManager
 from undetected_chromedriver import Chrome, ChromeOptions
 from requests import get as get_request
 from threading import Thread
-from platform import system as platf_system
 from time import sleep, time as ntime
 import numpy as np
 import queue
 import cv2
-import os
 
-from .project_manager import Project
+from .project_manager import Project, SerialDataset
 from .photoshop import *
-
-
-
-class ClipboardManager:
-    def __init__(self):
-        self.system = platf_system().lower()
-        self._win32clipboard, self._tempfile = None, None
-        self._import_windows_libs()
-
-    def _import_windows_libs(self):
-        if self._win32clipboard is None:
-            try:
-                import win32clipboard
-                self._win32clipboard = win32clipboard
-            except ImportError:
-                raise ImportError("Для работы с буфером обмена в Windows установите pywin32: pip install pywin32")
-
-    def copy_image_to_clipboard(self, image: str | np.ndarray):
-        if isinstance(image, str):
-            if not os.path.exists(image):
-                raise FileNotFoundError(f"File not found: {image}")
-            image_array = np.fromfile(image, dtype=np.uint8)
-            image = cv2.imdecode(image_array, cv2.IMREAD_UNCHANGED)
-        if image is not None and image.size > 0:
-            if self.system == "windows":
-                self._copy_windows(image)
-            else:
-                raise NotImplementedError(f"System {self.system} not supported")
-
-    def _copy_windows(self, image):
-        success, bmp_data = cv2.imencode('.bmp', image)
-        if not success:
-            raise RuntimeError("Failed to encode image to BMP")
-        if self._win32clipboard:
-            self._win32clipboard.OpenClipboard()
-            self._win32clipboard.EmptyClipboard()
-            self._win32clipboard.SetClipboardData(self._win32clipboard.CF_DIB, bmp_data.tobytes()[14:])
-            self._win32clipboard.CloseClipboard()
+from pcfuncs import *
 
 
 
