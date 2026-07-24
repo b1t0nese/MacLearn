@@ -8,11 +8,11 @@ import sys
 import os
 
 from project_module.project_manager import Project, get_dataset_statistics
-from project_module.autodataset import AutoDataset
+from autodataset_module.autodataset import AutoDataset
 from project_module.dataset_manager import AVAILABLE_FORMATS
 from interface_module.window import MainWindowUI, StatisticsWindow
 from interface_module.logs_window import LogsUI
-from project_module.photoshop import visualize_bbox, open_image
+from autodataset_module.photoshop import visualize_bbox, open_image
 from pcfuncs import *
 
 

@@ -8,7 +8,7 @@ import cv2
 import os
 
 from .project_manager import Project
-from .photoshop import *
+from autodataset_module.photoshop import *
 
 
 

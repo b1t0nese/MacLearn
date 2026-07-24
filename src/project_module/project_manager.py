@@ -10,7 +10,7 @@ import uuid
 import tempfile
 import zipfile
 
-from .photoshop import open_image
+from autodataset_module.photoshop import open_image
 
 
 
@@ -475,7 +475,7 @@ class SerialDataset(Project):
             if self.class_id>=len(classes_ids):
                 self.class_id = 0
 
-    def add_image(self, image_bytes: bytes, call_func: function=None) -> int:
+    def add_image(self, image_bytes: bytes, call_func=None) -> int:
         new_image_data = self.save_image(image_bytes, self.get_classes_ids_numbers(True)[self.class_id])
         self.next()
         if call_func is not None:

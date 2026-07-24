@@ -15,7 +15,7 @@ import numpy as np
 import queue
 import cv2
 
-from .project_manager import Project, SerialDataset
+from project_module.project_manager import Project, SerialDataset
 from .photoshop import *
 from pcfuncs import *
 
