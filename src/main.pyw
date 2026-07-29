@@ -81,6 +81,7 @@ class App:
 
     def init_config_window(self):
         self.windowUI.setWindowTitle(f'{self.windowUI.windowTitle()} ("{self.project_data.project_path}")')
+
         self.windowUI.project_tab.combo_dataset_format.addItems(AVAILABLE_FORMATS.keys())
         self.windowUI.project_tab.btn_save_project.clicked.connect(self.save_project)
         self.windowUI.dataset_tab.label_title.clicked.connect(self.open_dataset_information)
