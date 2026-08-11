@@ -14,10 +14,16 @@ from interface_module.window import MainWindowUI, StatisticsWindow
 from interface_module.logs_window import LogsUI
 from autodataset_module.photoshop import visualize_bbox, open_image
 from pcfuncs import *
+from logger import get_logger, log_call, LogContext, SessionLogger, install_exception_hook
+
+log = get_logger("main")
+session = SessionLogger("main")
+install_exception_hook(log)
 
 
 
 class App:
+    @log_call()
     def __init__(self, **config):
         self.config = config
         self.autodataset_worker: AutoDataset = None
@@ -25,40 +31,61 @@ class App:
         self.appApplication: QApplication = None
         self.windowUI: MainWindowUI = None
         self.statistics_window: StatisticsWindow = None
+
+        config_info = {k: v for k, v in config.items() if v is not None}
+        config_info.pop("project_path", None)
+        session.start(extra={"project_path": config["project_path"], **config_info})
         self.open_project(self.config["project_path"])
 
 
+    @log_call()
     def start(self, app: QApplication):
+        log.info("▶ Application starting...")
         exit_code = -1
         try:
             self.appApplication = app
             self.appApplication.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt6'))
+            log.info("✓ QDarkStyle theme applied")
             exit_code = self.appApplication.exec()
+            log.info("🏁 Qt event loop exited with code %d", exit_code)
         except Exception as e:
+            log.critical("💀 Critical error in event loop: %s", e, exc_info=True)
             QMessageBox.warning(
                 self.windowUI, "Critical error",
                 str(e), QMessageBox.StandardButton.Ok)
             self.close_application(exit_code)
             raise e
 
+    @log_call()
     def close_application(self, event=None, exit_code: int=0):
+        log.info("✕ Closing application (exit_code=%d)", exit_code)
+        session.end(exit_code)
+
         if self.autodataset_worker:
+            log.debug("Closing autodataset worker...")
             self.delete_autodataset_thread()
             self.autodataset_worker.close()
         if self.windowUI:
+            log.debug("Closing main window...")
             self.windowUI.close()
         if self.statistics_window:
+            log.debug("Closing statistics window...")
             self.statistics_window.close()
         if self.appApplication:
+            log.debug("Quitting Qt application...")
             self.appApplication.quit()
         if event:
             if hasattr(self.windowUI, 'original_close_event'):
                 self.windowUI.original_close_event(event)
             else:
                 event.accept()
+        log.info("✓ Application closed (exit_code=%d)", exit_code)
         sys.exit(exit_code)
 
+    @log_call()
     def new_window(self, project_path: str):
+        log.info("▶ Opening new window for project: %s", project_path)
+
         if self.autodataset_worker:
             try:
                 self.delete_autodataset_thread()
@@ -66,17 +93,30 @@ class App:
             except: pass
             self.autodataset_worker.deleteLater()
             self.autodataset_worker = None
-        self.project_data = Project(project_path)
-        self.autodataset_worker = AutoDataset(
-            self.project_data, self.config["chromedriver_path"], self.config["chrome_version"], self.config["chrome_headless"])
-        self.windowUI.initUI()
-        self.init_config_window()
-        self.init_project_conf_in_window()
-        self.update_dataset_view_in_window()
+
+        with LogContext("Project initialization", log):
+            self.project_data = Project(project_path)
+            log.info("✓ Project loaded: %s classes", len(self.project_data.get_all_classes_conf()))
+
+        with LogContext("AutoDataset initialization", log):
+            self.autodataset_worker = AutoDataset(
+                self.project_data, self.config["chromedriver_path"],
+                self.config["chrome_version"], self.config["chrome_headless"])
+            log.info("✓ Chrome driver: %s", "OK" if self.autodataset_worker.driver else "NOT LOADED")
+
+        with LogContext("UI initialization", log):
+            self.windowUI.initUI()
+            self.init_config_window()
+            self.init_project_conf_in_window()
+            self.update_dataset_view_in_window()
+
         if self.autodataset_worker.driver and not self.autodataset_worker.chrome_headless:
+            log.info("✓ Embedding Chrome window (PID: %d)", self.autodataset_worker.chrome_pid)
             self.windowUI.add_another_program_to_autodataset("chrome.exe", self.autodataset_worker.chrome_pid)
+
         self.windowUI.autodataset_update_statuses()
         self.windowUI.show()
+        log.info("✓ Window ready for project: %s", project_path)
 
 
     def init_config_window(self):
@@ -170,7 +210,7 @@ class App:
     def class_delete_command(self, class_id: int=None, field_widget=None, user_call: bool=True):
         if not self.windowUI.dataset_delete_class_field_widget(field_widget, user_call):
             return
-        log_window = LogsUI(); log_window.show()
+        log_window = LogsUI("main"); log_window.show()
         log_window.log(f'Удаление изображений из класса id={class_id}, type={field_widget.class_name.text()}...\n')
         QApplication.processEvents()
         try:
@@ -192,7 +232,7 @@ class App:
             None, "Выберите папку, куда будут скопированы изображения", "") if not dist_path else dist_path
         if not dist_path:
             return
-        log_window = LogsUI(); log_window.show()
+        log_window = LogsUI("main"); log_window.show()
         log_window.log(f'Экспорт изображений из класса id={class_id}, type={images_type} в "{dist_path}"...\n')
         QApplication.processEvents()
         os.makedirs(dist_path, exist_ok=True)
@@ -225,7 +265,7 @@ class App:
             None, "Выберите папку с изображениями, которые хотите импортировать", "") if not images_path else images_path
         if not images_path:
             return
-        log_window = LogsUI(); log_window.show()
+        log_window = LogsUI("main"); log_window.show()
         log_window.log(f'Импорт изображений в класс id={class_id}, type={images_type} из "{images_path}"...\n')
         QApplication.processEvents()
         images_paths = os.listdir(images_path); total = len(images_paths)

@@ -18,6 +18,8 @@ import cv2
 from project_module.project_manager import Project, SerialDataset
 from .photoshop import *
 from pcfuncs import *
+from logger import get_logger, LogContext
+log = get_logger("autodataset")
 
 
 
@@ -31,15 +33,28 @@ class AutoDataset(QObject):
     subclass_updated = pyqtSignal(str, int, str, int)
 
 
-    def update_information(self, log_emit: tuple, subclass_updated: tuple=None,
-                           stage_updated: tuple=None, cur_image: tuple=None):
+    def update_information(self, message: str, level: int = 0,
+                           subclass_updated: tuple = None,
+                           stage_updated: tuple = None,
+                           cur_image: tuple = None):
+        if level >= 2:
+            log.warning(message)
+        elif level == 1:
+            log.info("✓ %s", message)
+        elif level == 3:
+            log.info("⏭ %s", message)
+        else:
+            log.info(message)
         try:
-            self.log_field.emit(*log_emit)
-            if subclass_updated: self.subclass_updated.emit(*subclass_updated)
-            if stage_updated: self.stage_updated.emit(*stage_updated)
-            if cur_image: self.cur_image_label.emit(*cur_image)
+            self.log_field.emit(message, level)
+            if subclass_updated:
+                self.subclass_updated.emit(*subclass_updated)
+            if stage_updated:
+                self.stage_updated.emit(*stage_updated)
+            if cur_image:
+                self.cur_image_label.emit(*cur_image)
         except:
-            print(f"{log_emit[1]*"\n"}{log_emit[0]}")
+            print(f"{message}")
 
 
     def __init__(self, project_manager: Project, chromedriver_path: str=None,
@@ -48,6 +63,7 @@ class AutoDataset(QObject):
         self._is_running = False
         self._stop_collector = True
         self._image_downloaded = True
+        log.info("▶ Initializing AutoDataset (headless=%s, chrome_version=%s)", chrome_headless, chrome_version)
 
         try:
             service = Service(ChromeDriverManager().install()) if not chromedriver_path else None
@@ -69,9 +85,10 @@ class AutoDataset(QObject):
                 driver_executable_path=chromedriver_path)
             self.chrome_pid = self.driver.service.process.pid
             self.clipboard_manager = ClipboardManager()
+            log.info("✓ Chrome driver started (PID=%d)", self.chrome_pid)
         except Exception as e:
             self.driver, self.clipboard_manager = None, None
-            print(f"ERROR (chrome start): {e}")
+            log.error("✗ Chrome start failed: %s", e, exc_info=True)
 
         self.project_manager = project_manager
         self.update_project_data()
@@ -84,15 +101,19 @@ class AutoDataset(QObject):
         self.do_annotation = True
         self.do_augmentation = True
 
+        log.info("✓ AutoDataset initialized (%d classes)", len(self.project_data.get("classes", [])))
+
 
     def close(self):
+        log.info("▶ Closing AutoDataset")
         self._is_running = False
         if self.driver:
             self.driver.close()
-            # self.driver.quit()
+            log.debug("Chrome driver closed")
         del self.driver
         del self.clipboard_manager
         del self.project_manager
+        log.info("✓ AutoDataset closed")
 
 
     def always_switch_to_main_window(self):
@@ -104,7 +125,7 @@ class AutoDataset(QObject):
     def download_images(self, subclass_data: dict, class_id: int, num_images: int,
                         num_val_images: int = 0, downloaded: int = 0, to_download: int = 0):
         if num_val_images:
-            self.update_information(('INFO: Установка валидационных данных включена.', 0))
+            self.update_information("Validation data enabled", 0)
 
         self._stop_collector = False
         self._image_queue = queue.Queue()
@@ -116,7 +137,7 @@ class AutoDataset(QObject):
         def collector():
             seen_urls = set()
             example_image = subclass_data["example_image"]
-            self.update_information(('Поиск изображений...', 0))
+            self.update_information("Searching images...", 0)
 
             if example_image:
                 self.driver.get("https://yandex.ru/images")
@@ -153,7 +174,7 @@ class AutoDataset(QObject):
             if not example_image:
                 self.driver.get(f"https://yandex.ru/images/search?text={url_quote(subclass_data['search_query'])}")
 
-            self.update_information(('Идёт прогрузка изображений...', 0))
+            self.update_information("Loading images...", 0)
             last_height = self.driver.execute_script("return document.body.scrollHeight")
             while not self._stop_collector:
                 scroll_start = ntime()
@@ -214,12 +235,12 @@ class AutoDataset(QObject):
                         self.downloaded_images_count += 1
                         image_data = self.project_manager.get_image(image_id)
                         self.update_information(
-                            (f"Скачан файл {downloaded_images_count}/{to_download}. {str(image_data).strip('{}').replace("'", '')}", 0),
-                            (subclass_data["search_query"], downloaded_images_count, "", 0),
-                            ("Download images", (self.downloaded_images_count, self.all_images_count)),
-                            (self.project_manager.get_full_path("images", image_data["filename"]), np.array([])))
+                            f"Downloaded {downloaded_images_count}/{to_download}. id={image_data['id']} class={image_data['class_id']} file={image_data['filename']}", 0,
+                            subclass_updated=(subclass_data["search_query"], downloaded_images_count, "", 0),
+                            stage_updated=("Download images", (self.downloaded_images_count, self.all_images_count)),
+                            cur_image=(self.project_manager.get_full_path("images", image_data["filename"]), np.array([])))
                 except Exception as e:
-                    self.update_information((f"Ошибка при скачивании файла: {e}. src: {url}", 0))
+                    self.update_information(f"Download error: {e}. src: {url}", 2)
                 if num_images <= 0 and num_val_images <= 0:
                     self._stop_collector = True
 
@@ -238,7 +259,7 @@ class AutoDataset(QObject):
 
 
     def download_images_data(self):
-        self.update_information(('Установка изображений...\n', 3))
+        self.update_information("Downloading images...\n", 0)
         for class_data in self.project_data["classes"]:
             for subclass_data in class_data["subclasses"]:
                 if class_data["enabled"] and self._is_running:
@@ -250,15 +271,15 @@ class AutoDataset(QObject):
                     img_counts -= def_count; val_img_counts -= def_val_count
                     img_counts, val_img_counts = (img_counts if img_counts>0 else 0), (val_img_counts if val_img_counts>0 else 0)
                     all_imgs = def_count+def_val_count; self.downloaded_images_count += all_imgs; self.update_information(
-                        (f'INFO: В классе "{subclass_data["search_query"]}" уже присутствует изображений: {all_imgs}. Нужно установить изображений: {img_counts} (тренировочных), {val_img_counts} (валидационных).', 1),
+                        f'Class "{subclass_data["search_query"]}": {all_imgs} existing, need {img_counts} train + {val_img_counts} val', 0,
                         (subclass_data["search_query"], all_imgs, "", 0), ("Download images", (self.downloaded_images_count, self.all_images_count)))
                     if (img_counts or val_img_counts) and (def_count<must_img_counts or def_val_count<must_val_img_counts):
                         self.download_images(subclass_data, class_data["class_id"], img_counts, val_img_counts, all_imgs, must_img_counts+must_val_img_counts)
-        self.update_information(('Готово! Изображения скачаны.', 1))
+        self.update_information("Download complete", 1)
 
 
     def create_annotation_data(self):
-        self.update_information(('Создание аннотаций...\n', 3))
+        self.update_information("Creating annotations...\n", 0)
         all_images = []
         for images_type in ["default", "validation"]:
             all_images += self.project_manager.get_images(type=images_type)
@@ -283,16 +304,16 @@ class AutoDataset(QObject):
             else:
                 image = visualize_bbox(image, image_data["annotation"])
             self.created_annotations_count += 1
+            status = "created" if not image_data["annotation"] else "already existed"
             self.update_information(
-                (f"Аннотация №{i+1} {"уже создана" if image_data["annotation"] else "создана"}. {
-                    str(new_img_data or image_data).strip("{}").replace("'", "")}", 0),
-                stage_updated=("Create annotation", (
-                    self.created_annotations_count, self.all_images_count)), cur_image=(image_path, image))
-        self.update_information(('Готово! Аннотация создана.', 1))
+                f"Annotation #{i+1} {status}. {str(new_img_data or image_data).strip('{}').replace("'", "")}", 0,
+                stage_updated=("Create annotation", (self.created_annotations_count, self.all_images_count)),
+                cur_image=(image_path, image))
+        self.update_information("Annotations complete", 1)
 
 
     def create_augmentation_data(self):
-        self.update_information(('Создание аугментированных данных...\n', 3))
+        self.update_information("Creating augmentations...\n", 0)
         all_images = self.project_manager.get_images(type="default")
         for i, image_data in enumerate(all_images):
             if not self._is_running:
@@ -315,12 +336,12 @@ class AutoDataset(QObject):
                 preview_image_path = self.project_manager.get_full_path("images", augm_image_data.get("filename") or augmented.get("filename"))
                 preview_image = visualize_bbox(augmented.get("image", open_image(preview_image_path)), augm_image_data["annotation"])
                 self.augmented_images_count += 1
+                status = "already existed" if augmented.get("id") else "created"
                 self.update_information(
-                    (f"""Аугментация №{j+1} для изображения №{i+1} {"уже была " if augmented.get("id") else ""}создана. {
-                        str(augm_image_data).strip("{}").replace("'", "")}""", 0),
+                    f"Augmentation #{j+1} for image #{i+1} {status}. {str(augm_image_data).strip('{}').replace("'", "")}", 0,
                     stage_updated=("Create augmentation data", (self.augmented_images_count, self.need_augmented_images_count)),
                     cur_image=(preview_image_path, preview_image))
-        self.update_information(('Готово! Аугментированные данные созданы.', 1))
+        self.update_information("Augmentations complete", 1)
 
 
     def update_project_data(self):
@@ -366,29 +387,37 @@ class AutoDataset(QObject):
         self.update_all_information(True)
         self._is_running, self._image_downloaded = True, True
         self.always_switch_to_main_window_thread = None
-        self.update_information(('Начало работы.\n', 0))
+        self.update_information("AutoDataset run started\n", 0)
 
         if self.do_download_images and self.driver:
+            self.update_information("Phase 1/3: Downloading images...", 0)
             self.always_switch_to_main_window_thread = Thread(
                 target=self.always_switch_to_main_window, daemon=True)
             self.always_switch_to_main_window_thread.start()
-            self.download_images_data()
+            with LogContext("Download images", log):
+                self.download_images_data()
         else:
-            self.update_information((f'''INFO: Установка изображений выключена{
-                ", Chrome не инициализировался" if not self.driver else ""}.''', 2))
+            reason = "Chrome not initialized" if not self.driver else "disabled in settings"
+            self.update_information(f"Phase 1/3: Download skipped ({reason})", 3)
+
         if self.project_data["configuration"]["annotation"] and self.do_annotation:
-            self.create_annotation_data()
+            self.update_information("Phase 2/3: Creating annotations...", 0)
+            with LogContext("Create annotations", log):
+                self.create_annotation_data()
         else:
-            self.update_information(('INFO: Создание аннотации выключено.', 2))
+            self.update_information("Phase 2/3: Annotation skipped", 3)
+
         if self.project_data["configuration"]["augmentation_count"] and self.do_augmentation:
-            self.create_augmentation_data()
+            self.update_information("Phase 3/3: Creating augmentations...", 0)
+            with LogContext("Create augmentations", log):
+                self.create_augmentation_data()
         else:
-            self.update_information(('INFO: Создание аугментированных данных выключено.', 2))
+            self.update_information("Phase 3/3: Augmentation skipped", 3)
 
         if not self._is_running:
-            self.update_information(('Работа остановлена\n\n\n', 3))
+            self.update_information("AutoDataset was stopped by user\n\n\n", 2)
         else:
-            self.update_information(('Работа окончена, данные готовы.\n\n\n', 3))
+            self.update_information("AutoDataset finished successfully\n\n\n", 1)
 
         self._is_running, self._stop_collector = False, False
         if self.always_switch_to_main_window_thread:
@@ -398,5 +427,5 @@ class AutoDataset(QObject):
 
     @pyqtSlot()
     def stop(self):
+        self.update_information("User requested stop", 2)
         self._is_running, self._stop_collector = False, True
-        self.update_information(("Работа скоро остановится, пожалуйста не закрывайте это окно.\n", 1))
