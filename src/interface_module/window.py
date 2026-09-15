@@ -482,7 +482,24 @@ class MainWindowUI(QMainWindow):
             new_btn_start_style = new_btn_start_style.replace("#b71c1c", "#3d8b40")
         self.autodataset_tab.work_tab.btn_start.setStyleSheet(new_btn_start_style)
 
+    def autodataset_embed_chrome(self, chrome_pid: int=0):
+        if not chrome_pid:
+            return
+        self.add_another_program_to_autodataset("chrome.exe", chrome_pid)
+
+
+    def autodataset_set_chrome_lock(self, locked: bool=True):
+        program_tab = getattr(self.autodataset_tab, "program_tab", None)
+        if program_tab:
+            program_tab.set_lock_resize(locked)
+
+
     def add_another_program_to_autodataset(self, program_name: str, program_pid: int=None):
+        old_program_tab = getattr(self.autodataset_tab, "program_tab", None)
+        if old_program_tab:
+            self.autodataset_tab.tab_widget.removeTab(
+                self.autodataset_tab.tab_widget.indexOf(old_program_tab))
+            old_program_tab.deleteLater()
         self.autodataset_tab.program_tab = EmbeddedProgramWidget(program_name, program_pid)
         self.autodataset_tab.tab_widget.addTab(self.autodataset_tab.program_tab, program_name)
         def embed_on_tab_switch(index):

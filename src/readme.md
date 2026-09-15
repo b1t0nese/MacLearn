@@ -60,6 +60,10 @@ maclearn/
     ├── start.bat                       # Быстрый запуск
     ├── autodataset_module/
     │   ├── autodataset.py              # AutoDataset (QObject)
+    │   ├── browser.py                  # ChromeBrowser — ленивый запуск Chrome, кэш
+    │   ├── sources/                    # источники изображений (реестр)
+    │   │   ├── base.py                 # BaseImageSource, AVAILABLE_SOURCES
+    │   │   └── yandex_images.py        # YandexImagesSource
     │   └── photoshop.py                # Обработка изображений
     ├── project_module/
     │   ├── project_manager.py          # Dataset, Project, статистика
@@ -272,6 +276,8 @@ install_exception_hook(log)         # Глобальный перехват ис
 | Файл | Назначение |
 |------|------------|
 | `autodataset.py` | `AutoDataset` — QObject-воркер с сигналами |
+| `browser.py` | `ChromeBrowser` — ленивый запуск Chrome, кэш драйвера и сессий |
+| `sources/` | `BaseImageSource` + `AVAILABLE_SOURCES` (реестр), `YandexImagesSource` |
 | `photoshop.py` | OpenCV-обработка, rembg, аугментации |
 
 ## ▶ [interface_module](https://github.com/b1t0nese/MacLearn/blob/main/src/interface_module/readme.md)
@@ -298,7 +304,7 @@ main()
        ├─ session.start()
        ├─ open_project(path)
        │    └─ Project(path)           # инициализация SQLite
-       │    └─ AutoDataset(...)        # Chrome driver
+       │    └─ AutoDataset(...)        # ChromeBrowser без запуска Chrome
        │    └─ MainWindowUI.initUI()
        │    └─ init_config_window()    # сигналы UI
        │    └─ init_project_conf_in_window()
@@ -315,8 +321,10 @@ main()
 start_autodataset()
   └─ QThread
   └─ AutoDataset.run()
-       ├─ Phase 1: download_images_data()     # парсинг Яндекс.Картинок
-       │    └─ download_images(subclass)      # collector + downloader (2 потока)
+       ├─ ChromeBrowser.start()               # отложенный запуск + кэш chromedriver
+       │    └─ ready(pid) → UI встраивает окно браузера
+       ├─ Phase 1: download_images_data()     # источник изображений (sources)
+       │    └─ download_images(subclass)      # source.collect + downloader (2 потока)
        ├─ Phase 2: create_annotation_data()   # rembg + OpenCV контуры
        ├─ Phase 3: create_augmentation_data() # Albumentations
   └─ finished → on_autodataset_finished()

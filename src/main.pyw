@@ -102,17 +102,13 @@ class App:
             self.autodataset_worker = AutoDataset(
                 self.project_data, self.config["chromedriver_path"],
                 self.config["chrome_version"], self.config["chrome_headless"])
-            log.info("✓ Chrome driver: %s", "OK" if self.autodataset_worker.driver else "NOT LOADED")
+            log.info("✓ AutoDataset ready (Chrome will be started on demand)")
 
         with LogContext("UI initialization", log):
             self.windowUI.initUI()
             self.init_config_window()
             self.init_project_conf_in_window()
             self.update_dataset_view_in_window()
-
-        if self.autodataset_worker.driver and not self.autodataset_worker.chrome_headless:
-            log.info("✓ Embedding Chrome window (PID: %d)", self.autodataset_worker.chrome_pid)
-            self.windowUI.add_another_program_to_autodataset("chrome.exe", self.autodataset_worker.chrome_pid)
 
         self.windowUI.autodataset_update_statuses()
         self.windowUI.show()
@@ -439,8 +435,8 @@ class App:
 
     def autodataset_worker_disconnect_signals(self):
         try:
-            if self.autodataset_worker.driver and not self.autodataset_worker.chrome_headless:
-                self.autodataset_worker.chrome_widget_lock.disconnect()
+            self.autodataset_worker.browser.ready.disconnect()
+            self.autodataset_worker.browser.chrome_widget_lock.disconnect()
             self.autodataset_worker.log_field.disconnect()
             self.autodataset_worker.cur_image_label.disconnect()
             self.autodataset_worker.stage_updated.disconnect()
@@ -449,9 +445,9 @@ class App:
 
     def autodataset_worker_connect_signals(self):
         self.autodataset_worker_disconnect_signals()
-        if self.autodataset_worker.driver and not self.autodataset_worker.chrome_headless:
-            self.autodataset_worker.chrome_widget_lock.connect(
-                lambda boolean: self.windowUI.autodataset_tab.program_tab.set_lock_resize(boolean))
+        if not self.autodataset_worker.browser.chrome_headless:
+            self.autodataset_worker.browser.ready.connect(self.windowUI.autodataset_embed_chrome)
+        self.autodataset_worker.browser.chrome_widget_lock.connect(self.windowUI.autodataset_set_chrome_lock)
         self.autodataset_worker.log_field.connect(self.windowUI.autodataset_log)
         self.autodataset_worker.cur_image_label.connect(self.windowUI.autodataset_set_image)
         self.autodataset_worker.stage_updated.connect(self.windowUI.update_autodataset_main_status)

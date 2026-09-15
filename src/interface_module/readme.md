@@ -95,6 +95,8 @@
 | `update_autodataset_main_status(name, progress)` | Обновить статус этапа |
 | `autodataset_set_object_status(...)` | Обновить статус подкласса |
 | `set_btn_start_autodataset_state(state)` | Кнопка Запуск/Стоп |
+| `autodataset_embed_chrome(pid)` | Слот сигнала `ChromeBrowser.ready` — встроить окно Chrome |
+| `autodataset_set_chrome_lock(locked)` | Слот сигнала `ChromeBrowser.chrome_widget_lock` |
 | `add_another_program_to_autodataset(...)` | Вкладка с встроенным Chrome |
 
 **Структура главного окна:**
