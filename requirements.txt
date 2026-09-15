@@ -13,5 +13,6 @@ undetected_chromedriver
 webdriver_manager
 onnxruntime
 standard_distutils
-AlbumentationsX
+AlbumentationsX==2.0.20
+scipy==1.17.1
 plyer

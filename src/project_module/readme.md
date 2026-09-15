@@ -118,43 +118,7 @@ project/
 Декоратор: регистрирует класс в `AVAILABLE_FORMATS`.
 
 ### Функция `export_image(...)`
-Экспорт изображения с resize в JPG (качество 95).
-
-### `YOLOdataset`
-
-Экспорт в формате **YOLO**:
-
-```
-dataset/
-├── data.yaml          # конфигурация (nc, names, path)
-├── train/
-│   ├── 0/             # класс 0
-│   │   ├── img.jpg
-│   │   └── labels/    # .txt файлы аннотаций
-│   └── 1/             # класс 1
-└── val/
-    └── ...
-```
-
-- `create_paths(classes_len, annotation)` — структура папок
-- `create_yaml_config(classes_config)` — data.yaml
-- `export_data(classes_config, images_size)` — изображения с resize
-- `create_annotations()` — YOLO-формат аннотаций (нормализованные)
-
-### `CSVdataset`
-
-Экспорт в формате **CSV**:
-
-```
-dataset/
-├── train.csv
-├── val.csv
-└── train/images/
-└── val/images/
-```
-
-- С аннотациями: `filename, class_id, x_min, y_min, x_max, y_max`
-- Без аннотаций: `filename, class_id`
+Экспорт изображения с resize в JPG.
 
 ---
 

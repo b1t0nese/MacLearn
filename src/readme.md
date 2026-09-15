@@ -208,7 +208,7 @@ install_exception_hook(log)         # Глобальный перехват ис
 
 - Максимальный размер: **10 MB**
 - Резервных копий: **5**
-- Папка: `logs/` рядом с проектом
+- Папка: `%APPDATA%/maclearn/logs/` (папка данных приложения в AppData)
 
 ### Уровни логирования по умолчанию
 
@@ -256,7 +256,7 @@ install_exception_hook(log)         # Глобальный перехват ис
 
 # Модули
 
-## ▶ [project_module](src/project_module/readme.md)
+## ▶ [project_module](https://github.com/b1t0nese/MacLearn/blob/main/src/project_module/readme.md)
 
 Управление проектами, SQLite-хранилище, экспорт в форматы.
 
@@ -265,7 +265,7 @@ install_exception_hook(log)         # Глобальный перехват ис
 | `project_manager.py` | `Dataset`, `Project`, `SerialDataset`, `get_dataset_statistics` |
 | `dataset_manager.py` | `BaseDataset`, `YOLOdataset`, `CSVdataset`, `AVAILABLE_FORMATS` |
 
-## ▶ [autodataset_module](src/autodataset_module/readme.md)
+## ▶ [autodataset_module](https://github.com/b1t0nese/MacLearn/blob/main/src/autodataset_module/readme.md)
 
 Автоматический сбор данных: парсинг, скачивание, аннотации, аугментация.
 
@@ -274,7 +274,7 @@ install_exception_hook(log)         # Глобальный перехват ис
 | `autodataset.py` | `AutoDataset` — QObject-воркер с сигналами |
 | `photoshop.py` | OpenCV-обработка, rembg, аугментации |
 
-## ▶ [interface_module](src/interface_module/readme.md)
+## ▶ [interface_module](https://github.com/b1t0nese/MacLearn/blob/main/src/interface_module/readme.md)
 
 PyQt6 интерфейс: главное окно, виджеты, лог-окно, встраивание Chrome.
 
