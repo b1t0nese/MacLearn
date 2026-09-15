@@ -61,9 +61,7 @@ class Dataset:
 
     def close_all_connections(self):
         for con in self._connections:
-            try:
-                con.close()
-            except: pass
+            con.close()
         self._connections.clear()
 
     def initDB(self):
@@ -274,9 +272,8 @@ class Project(Dataset):
             self.is_zip_project = True
             self.original_zip_path = os.path.abspath(path)
             self.temp_dir_obj = tempfile.TemporaryDirectory(prefix="maclproj_")
-            temp_path = self.temp_dir_obj.name
-            self._unpack_from_zip(self.original_zip_path, temp_path)
-            self._working_path = temp_path
+            self._unpack_from_zip(self.original_zip_path, self.temp_dir_obj.name)
+            self._working_path = self.temp_dir_obj.name
         else:
             self._working_path = path
         super().__init__(self._working_path)

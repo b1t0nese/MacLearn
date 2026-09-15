@@ -25,11 +25,11 @@ echo !files!
 
 echo.
 echo 2. Compress all files with LZMA...
-if defined files (cmd /c upx --best --lzma !files!)
+if defined files (cmd /c upx --best --force --lzma !files:%cd%\=!)
 
 echo.
 echo 3. Compress all files with default...
-if defined files (cmd /c upx --best !files!)
+if defined files (cmd /c upx --best --force !files:%cd%\=!)
 
 del upx.exe >nul
 echo.

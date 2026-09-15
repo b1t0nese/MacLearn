@@ -63,9 +63,13 @@ class FileFormatter(logging.Formatter):
 def _get_log_dir() -> str:
     if LOG_DIR:
         return LOG_DIR
-    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    log_dir = os.path.join(base, "logs")
-    os.makedirs(log_dir, exist_ok=True)
+    try:
+        from pcfuncs import get_appdata_dir
+        log_dir = get_appdata_dir("logs")
+    except Exception:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_dir = os.path.join(base, "logs")
+        os.makedirs(log_dir, exist_ok=True)
     return log_dir
 
 

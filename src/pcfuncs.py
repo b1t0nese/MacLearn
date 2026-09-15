@@ -11,6 +11,27 @@ import sys
 import os
 
 
+APP_NAME = "maclearn"
+
+
+def get_appdata_root(local: bool = False) -> str:
+    env_var = "LOCALAPPDATA" if local else "APPDATA"
+    path = os.environ.get(env_var)
+    if path and os.path.isdir(path):
+        return path
+    fallback = os.path.join(
+        os.path.expanduser("~"), "AppData", "Local" if local else "Roaming")
+    os.makedirs(fallback, exist_ok=True)
+    return fallback
+
+
+def get_appdata_dir(*subdirs: str, local: bool = False, create: bool = True) -> str:
+    path = os.path.join(get_appdata_root(local), APP_NAME, *subdirs)
+    if create:
+        os.makedirs(path, exist_ok=True)
+    return path
+
+
 
 def launch_new_instance():
     if getattr(sys, 'frozen', False):
