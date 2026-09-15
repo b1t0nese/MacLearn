@@ -7,6 +7,8 @@
 | Файл | Назначение |
 |------|------------|
 | [`autodataset.py`](#autodatasetpy) | `AutoDataset` — QObject-воркер с сигналами |
+| [`browser.py`](#browserpy) | `ChromeBrowser` — ленивый запуск Chrome, кэш драйвера и сессий |
+| [`sources/`](#sources) | Источники изображений: `base.py` (реестр), `yandex_images.py` (Яндекс.Картинки) |
 | [`photoshop.py`](#photoshoppy) | Обработка изображений: OpenCV, rembg, Albumentations |
 
 ---
@@ -22,7 +24,6 @@
 | Сигнал | Тип | Назначение |
 |--------|------|------------|
 | `finished` | — | Работа завершена |
-| `chrome_widget_lock` | `bool` | Заблокировать/разблокировать встроенное окно Chrome |
 | `progress` | `int` | Прогресс |
 | `log_field` | `(str, int)` | Лог-сообщение для UI |
 | `cur_image_label` | `(str, np.ndarray)` | Текущее изображение для превью |
@@ -43,14 +44,15 @@
 
 | Метод | Описание |
 |-------|----------|
-| `__init__(project_manager, chromedriver_path, chrome_version, chrome_headless)` | Инициализация Chrome driver |
-| `close()` | Закрытие воркера |
+| `__init__(project_manager, chromedriver_path, chrome_version, chrome_headless, chrome_session)` | Инициализация воркера и `ChromeBrowser` (Chrome при этом не запускается) |
+| `start_browser()` | Отложенный запуск Chrome (`self.browser.start()`) |
+| `close()` | Закрытие источника и браузера |
 | `update_project_data()` | Загрузить конфигурацию проекта |
 | `update_all_information(clear)` | Обновить статусы/счётчики для UI |
 | `run()` | Главный метод потока (3 фазы) |
 | `stop()` | Остановка по запросу пользователя |
 | `always_switch_to_main_window()` | Фоновый поток: переключение на главное окно Chrome |
-| `download_images(subclass_data, ...)` | Скачивание изображений для подкласса |
+| `download_images(subclass_data, ...)` | Скачивание изображений для подкласса (источник → очередь → downloader) |
 | `download_images_data()` | Проход по всем классам и подклассам |
 | `create_annotation_data()` | Автоматическое создание аннотаций |
 | `create_augmentation_data()` | Генерация аугментаций |
@@ -59,21 +61,125 @@
 
 | Фаза | Метод | Описание |
 |------|-------|----------|
-| **1/3** | `download_images_data()` | Скачивание из Яндекс.Картинок |
+| **1/3** | `download_images_data()` | Скачивание через источник изображений (по умолчанию `YandexImagesSource`) |
 | **2/3** | `create_annotation_data()` | rembg + OpenCV контуры → bbox |
 | **3/3** | `create_augmentation_data()` | Albumentations вариации |
+
+Перед фазой 1/3 воркер вызывает `start_browser()` — Chrome стартует **лениво**, поэтому запуск
+приложения не ждёт браузер. Если скачивание отключено или Chrome не запустился, фаза пропускается.
 
 #### Скачивание (`download_images`)
 
 Двухпоточная схема:
-- **Collector** — скроллит Яндекс.Картинки, собирает URL, кладёт в `queue.Queue`
+- **Collector** — обращается к источнику (`self.source.collect(...)`), который отдаёт найденные URL в `on_url()`
 - **Downloader** — берёт URL из очереди, скачивает через `requests`, сохраняет
 
 ```
-Яндекс.Картинки ──► collector ──► queue ──► downloader ──► project_manager.save_image()
+источник (sources) ──► queue ──► downloader ──► project_manager.save_image()
 ```
 
-Поддержка поиска по фото-примеру: копирование в буфер обмена (ClipboardManager) и вставка в поисковую строку.
+Источник создаётся в `download_images_data()` из реестра `AVAILABLE_SOURCES`; имя источника
+берётся из `configuration["image_source"]` (по умолчанию `DEFAULT_SOURCE`).
+`collector()` обёрнут в `try/finally`, поэтому очередь всегда закрывается (`None`) даже при ошибке сбора.
+
+#### Остановка
+
+`stop()` выставляет `_is_running = False` и флаг-событие сессии (`_stop_event`), а `stop_check()`
+возвращает `True`, если событие выставлено **или** воркер уже не запущен. Событие создаётся заново
+только при следующем `download_images()`, поэтому «залипший» коллектор (не успевший выйти за
+`collector_thread.join(timeout=5)`) завершается сам и не продолжает сбор после остановки.
+
+---
+
+## `browser.py`
+
+### Класс `ChromeBrowser(QObject)`
+
+Жизненный цикл браузера: **Chrome не запускается при инициализации**, а стартует по требованию
+(`start()`). Источники изображений работают с ним через `browser.driver`.
+
+#### Сигналы
+
+| Сигнал | Тип | Назначение |
+|--------|------|------------|
+| `ready` | `int` | Chrome запущен (PID) — UI встраивает окно браузера |
+| `failed` | `str` | Ошибка запуска |
+| `closed` | — | Chrome закрыт |
+| `chrome_widget_lock` | `bool` | Блокировка ресайза встроенного окна на время автоматизации |
+
+#### Методы
+
+| Метод | Описание |
+|-------|----------|
+| `__init__(chromedriver_path, chrome_version, chrome_headless, session_name)` | Настройки запуска и папка сессии |
+| `is_ready()` | Запущен ли браузер |
+| `start()` / `stop()` / `restart()` | Ленивый запуск, закрытие (`driver.quit()`), перезапуск |
+| `lock(locked)` | Эмит `chrome_widget_lock` |
+| `switch_to_main_window()` | Переключение на первую вкладку |
+| `clear_driver_cache()` | Удалить кэшированный chromedriver |
+| `clear_session_cache()` | Удалить папку сессии браузера |
+
+#### Кэш приложения
+
+| Что | Путь |
+|-----|------|
+| chromedriver | `%APPDATA%/maclearn/chromedriver.exe` |
+| Сессия браузера (профиль, cookies, disk cache) | `%APPDATA%/maclearn/cache/browser_sessions/<session_name>` |
+| Кэш `webdriver_manager` | `%APPDATA%/maclearn/cache/webdriver_manager` |
+
+Порядок выбора драйвера в `start()`: путь из аргумента → кэшированный `chromedriver.exe` → скачивание
+через `webdriver_manager` (результат копируется в `chromedriver.exe`). Если Chrome не запустился
+с кэшированным драйвером (например, драйвер устарел), кэш сбрасывается и выполняется повторная
+попытка с новой сессией. Профиль сессии хранится между запусками (`user_data_dir` в `undetected_chromedriver`).
+
+---
+
+## `sources`
+
+Пакет источников изображений: новый источник = новый файл + регистрация декоратором.
+
+### `sources/base.py`
+
+| Компонент | Описание |
+|-----------|----------|
+| `BaseImageSource` | Базовый класс: `__init__(browser, clipboard_manager)`, `collect(...)`, `stop()` |
+| `collect(subclass_data, on_url, stop_check, status, example_image_path)` | Собрать ссылки на изображения |
+| `AVAILABLE_SOURCES` | Реестр источников (`dict[str, type]`) |
+| `DEFAULT_SOURCE` | Источник по умолчанию (`"Yandex"`) |
+| `register_source(name)` | Декоратор регистрации класса источника |
+| `create_source(name, browser, clipboard_manager)` | Создать источник по имени |
+
+### `sources/yandex_images.py`
+
+`YandexImagesSource` (`@register_source("Yandex")`) — логика и селекторы Яндекс.Картинок в одном месте:
+
+| Метод | Описание |
+|-------|----------|
+| `collect(...)` | Поиск + прокрутка + сбор URL (блокировка окна на время работы) |
+| `_open_search_page(query, example_image_path, stop_check)` | Поиск по фото-примеру (буфер обмена + «Похожие») |
+| `_scroll_and_collect(on_url, stop_check)` | Прокрутка страницы и «Показать ещё» |
+| `_get_image_url(img_element)` | Открыть изображение и получить `src` |
+
+#### Селекторы и таймауты
+
+Все CSS/XPath-селекторы вынесены в атрибуты класса (`CSS_SEARCH_IMAGE`, `CSS_OPENED_IMAGE`,
+`CSS_CLOSE_VIEWER`, `CSS_CBIR_INTENT`, `XPATH_SHOW_MORE`, `XPATH_SIMILAR`) — при изменении вёрстки
+Яндекс.Картинок править нужно только их. Таймауты: `ELEMENT_TIMEOUT`, `SCROLL_TIMEOUT`, `SIMILAR_TIMEOUT`.
+
+#### Пример нового источника
+
+```python
+@register_source("MySource")
+class MySource(BaseImageSource):
+    name = "MySource"
+
+    def collect(self, subclass_data, on_url, stop_check, status=None, example_image_path=None):
+        self.browser.lock(True)
+        try:
+            ...
+        finally:
+            self.browser.lock(False)
+```
 
 ---
 
@@ -151,8 +257,14 @@
 
 ```
 autodataset.py  ──►  project_module.project_manager (Project, SerialDataset)
+              ──►  .browser (ChromeBrowser)
+              ──►  .sources (AVAILABLE_SOURCES, DEFAULT_SOURCE, create_source)
               ──►  .photoshop (все функции)
               ──►  pcfuncs (ClipboardManager)
               ──►  logger (get_logger, LogContext)
+browser.py      ──►  undetected_chromedriver, webdriver_manager
+              ──►  pcfuncs (get_appdata_dir), logger
+sources/*       ──►  .base (BaseImageSource, register_source)
+              ──►  ../browser (ChromeBrowser), selenium, logger
 photoshop.py  ──►  cv2, albumentations, rembg, numpy
 ```

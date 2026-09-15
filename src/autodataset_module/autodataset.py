@@ -1,22 +1,15 @@
-from urllib.parse import quote as url_quote
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from undetected_chromedriver import Chrome, ChromeOptions
 from requests import get as get_request
-from threading import Thread
-from time import sleep, time as ntime
+from threading import Event, Thread
+from time import sleep
 import numpy as np
 import queue
 import cv2
 
 from project_module.project_manager import Project, SerialDataset
+from .browser import ChromeBrowser
 from .photoshop import *
+from .sources import AVAILABLE_SOURCES, DEFAULT_SOURCE, create_source
 from pcfuncs import *
 from logger import get_logger, LogContext
 log = get_logger("autodataset")
@@ -25,7 +18,6 @@ log = get_logger("autodataset")
 
 class AutoDataset(QObject):
     finished = pyqtSignal()
-    chrome_widget_lock = pyqtSignal(bool)
     progress = pyqtSignal(int)
     log_field = pyqtSignal(str, int)
     cur_image_label = pyqtSignal(str, np.ndarray)
@@ -58,37 +50,18 @@ class AutoDataset(QObject):
 
 
     def __init__(self, project_manager: Project, chromedriver_path: str=None,
-                 chrome_version: int=None, chrome_headless: bool=False):
+                 chrome_version: int=None, chrome_headless: bool=False,
+                 chrome_session: str="default"):
         super().__init__()
         self._is_running = False
-        self._stop_collector = True
+        self._stop_event = None
         self._image_downloaded = True
         log.info("▶ Initializing AutoDataset (headless=%s, chrome_version=%s)", chrome_headless, chrome_version)
 
-        try:
-            service = Service(ChromeDriverManager().install()) if not chromedriver_path else None
-            options = ChromeOptions()
-            self.chrome_headless = chrome_headless
-            if self.chrome_headless:
-                options.add_argument('--headless')
-                options.add_argument('--disable-dev-shm-usage')
-                options.add_argument('--window-size=1920,1080')
-                options.add_argument('--disable-gpu')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-features=ChromeBrowserCloudManagement')
-            options.add_argument('--disable-blink-features=AutomationControlled')
-            options.add_argument('--disable-infobars')
-            options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' \
-                'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-            options.add_argument('--log-level=3')
-            self.driver = Chrome(options, service=service, version_main=chrome_version,
-                driver_executable_path=chromedriver_path)
-            self.chrome_pid = self.driver.service.process.pid
-            self.clipboard_manager = ClipboardManager()
-            log.info("✓ Chrome driver started (PID=%d)", self.chrome_pid)
-        except Exception as e:
-            self.driver, self.clipboard_manager = None, None
-            log.error("✗ Chrome start failed: %s", e, exc_info=True)
+        self.browser = ChromeBrowser(chromedriver_path, chrome_version,
+                                     chrome_headless, chrome_session, parent=self)
+        self.clipboard_manager = self._create_clipboard_manager()
+        self.source = None
 
         self.project_manager = project_manager
         self.update_project_data()
@@ -104,22 +77,37 @@ class AutoDataset(QObject):
         log.info("✓ AutoDataset initialized (%d classes)", len(self.project_data.get("classes", [])))
 
 
+    def _create_clipboard_manager(self):
+        try:
+            return ClipboardManager()
+        except Exception as e:
+            log.warning("⚠ Clipboard manager is not available: %s", e)
+
+
     def close(self):
         log.info("▶ Closing AutoDataset")
         self._is_running = False
-        if self.driver:
-            self.driver.close()
-            log.debug("Chrome driver closed")
-        del self.driver
-        del self.clipboard_manager
-        del self.project_manager
+        if self.source is not None:
+            self.source.stop()
+            self.source = None
+        self.browser.stop()
         log.info("✓ AutoDataset closed")
 
 
+    def start_browser(self) -> bool:
+        """Отложенный запуск Chrome: браузер стартует только тогда, когда он реально нужен."""
+        return self.browser.start()
+
+
     def always_switch_to_main_window(self):
-        while self._is_running and self.driver:
-            # if self.driver.current_window_handle!=self.driver.window_handles[0]:
-            self.driver.switch_to.window(self.driver.window_handles[0])
+        while self._is_running and self.browser.is_ready():
+            self.browser.switch_to_main_window()
+            sleep(0.5)
+
+
+    def _get_example_image_path(self, subclass_data: dict) -> str:
+        example_image = subclass_data.get("example_image")
+        return self.project_manager.get_full_path("example_images", example_image) if example_image else None
 
 
     def download_images(self, subclass_data: dict, class_id: int, num_images: int,
@@ -127,97 +115,26 @@ class AutoDataset(QObject):
         if num_val_images:
             self.update_information("Validation data enabled", 0)
 
-        self._stop_collector = False
+        self._stop_event = Event()
         self._image_queue = queue.Queue()
-        try:
-            self.chrome_widget_lock.emit(True)
-        except:
-            pass
+
+        def stop_check() -> bool:
+            return self._stop_event.is_set() or not self._is_running
 
         def collector():
-            seen_urls = set()
-            example_image = subclass_data["example_image"]
-            self.update_information("Searching images...", 0)
-
-            if example_image:
-                self.driver.get("https://yandex.ru/images")
-                self.clipboard_manager.copy_image_to_clipboard(
-                    self.project_manager.get_full_path("example_images", example_image))
-                search_box = self.driver.find_element(By.NAME, "text")
-                ActionChains(self.driver).key_down(Keys.CONTROL).send_keys("v")\
-                    .key_up(Keys.CONTROL).perform()
-                try:
-                    WebDriverWait(self.driver, 5).until(
-                        EC.presence_of_element_located((
-                            By.CSS_SELECTOR, ".CbirIntent.cbir-intent.cbir-intent_visible_yes.i-bem.cbir-intent_js_inited.cbir-intent_loaded_yes")))
-                    search_box = WebDriverWait(self.driver, 5).until(
-                        EC.presence_of_element_located((By.TAG_NAME, "textarea")))
-                    search_box.send_keys(subclass_data["search_query"])
-                    sleep(0.5)
-                    search_box.send_keys(Keys.ENTER)
-                    start = ntime()
-                    while not self._stop_collector:
-                        try:
-                            WebDriverWait(self.driver, 10).until(
-                                EC.presence_of_element_located((
-                                    By.XPATH, "//a[text()='Похожие' and @class='CbirNavigation-TabsItem "
-                                    "CbirNavigation-TabsItem_name_similar-page']"))).click()
-                            break
-                        except:
-                            if ntime() - start > 30:
-                                example_image = None
-                                break
-                            sleep(0.5)
-                except:
-                    example_image = None
-
-            if not example_image:
-                self.driver.get(f"https://yandex.ru/images/search?text={url_quote(subclass_data['search_query'])}")
-
-            self.update_information("Loading images...", 0)
-            last_height = self.driver.execute_script("return document.body.scrollHeight")
-            while not self._stop_collector:
-                scroll_start = ntime()
-                new_height = last_height
-                while new_height == last_height and not self._stop_collector:
-                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                    sleep(0.5)
-                    new_height = self.driver.execute_script("return document.body.scrollHeight")
-                    if ntime() - scroll_start >= 5:
-                        break
-                if ntime() - scroll_start >= 5 or self._stop_collector:
-                    try:
-                        show_more = self.driver.find_element(By.XPATH, "//button[.//span[text()='Показать ещё']]")
-                        show_more.click()
-                        sleep(1)
-                    except:
-                        pass
-                    last_height = self.driver.execute_script("return document.body.scrollHeight")
-                    continue
-                last_height = new_height
-
-                image_elements = self.driver.find_elements(By.CSS_SELECTOR, ".Link.ImagesContentImage-Cover")
-                for img in image_elements:
-                    if self._stop_collector:
-                        break
-                    try:
-                        self.driver.execute_script("arguments[0].scrollIntoView();", img)
-                        self.driver.execute_script("arguments[0].click();", img)
-                        img_src = WebDriverWait(self.driver, 10).until(
-                            EC.presence_of_element_located((By.CLASS_NAME, "MMImage-Origin"))
-                        ).get_attribute('src')
-                        self.driver.find_element(By.CSS_SELECTOR, ".Button.ImagesViewer-Close").click()
-                        if img_src not in seen_urls:
-                            seen_urls.add(img_src)
-                            self._image_queue.put(img_src)
-                    except Exception as e:
-                        sleep(0.2)
-            self._image_queue.put(None)
+            try:
+                self.source.collect(
+                    subclass_data, self._image_queue.put, stop_check,
+                    self.update_information, self._get_example_image_path(subclass_data))
+            except Exception as e:
+                self.update_information(f"Collect error: {e}", 2)
+            finally:
+                self._image_queue.put(None)
 
         def downloader():
             nonlocal downloaded, num_images, num_val_images
             downloaded_images_count = downloaded
-            while not self._stop_collector:
+            while not stop_check():
                 try:
                     url = self._image_queue.get(timeout=1)
                 except queue.Empty:
@@ -242,7 +159,7 @@ class AutoDataset(QObject):
                 except Exception as e:
                     self.update_information(f"Download error: {e}. src: {url}", 2)
                 if num_images <= 0 and num_val_images <= 0:
-                    self._stop_collector = True
+                    self._stop_event.set()
 
         collector_thread = Thread(target=collector, daemon=True)
         collector_thread.start()
@@ -250,16 +167,20 @@ class AutoDataset(QObject):
         downloader_thread.start()
 
         downloader_thread.join()
-        self._stop_collector = True
+        self._stop_event.set()
         collector_thread.join(timeout=5)
-        try:
-            self.chrome_widget_lock.emit(False)
-        except:
-            pass
+        if collector_thread.is_alive():
+            log.warning("⚠ Collector thread still running (waiting for the Selenium call to finish)")
 
 
     def download_images_data(self):
-        self.update_information("Downloading images...\n", 0)
+        source_name = self.project_data["configuration"].get("image_source", DEFAULT_SOURCE)
+        self.source = create_source(source_name, self.browser, self.clipboard_manager)
+        if not self.source:
+            self.update_information(
+                f"Unknown image source \"{source_name}\". Available: {list(AVAILABLE_SOURCES)}", 2)
+            return
+        self.update_information(f"Downloading images with source \"{self.source.name}\"...\n", 0)
         for class_data in self.project_data["classes"]:
             for subclass_data in class_data["subclasses"]:
                 if class_data["enabled"] and self._is_running:
@@ -369,7 +290,7 @@ class AutoDataset(QObject):
                                                     for cl in self.project_data["classes"] if cl["enabled"]])\
                                                         * self.project_data["configuration"]["augmentation_count"]
 
-        if self.do_download_images and self.driver:
+        if self.do_download_images and self.browser.is_ready():
             self.stage_updated.emit("Download images", (self.downloaded_images_count, self.all_images_count))
         for class_data in self.project_data["classes"]:
             if class_data["enabled"]:
@@ -389,16 +310,20 @@ class AutoDataset(QObject):
         self.always_switch_to_main_window_thread = None
         self.update_information("AutoDataset run started\n", 0)
 
-        if self.do_download_images and self.driver:
-            self.update_information("Phase 1/3: Downloading images...", 0)
-            self.always_switch_to_main_window_thread = Thread(
-                target=self.always_switch_to_main_window, daemon=True)
-            self.always_switch_to_main_window_thread.start()
-            with LogContext("Download images", log):
-                self.download_images_data()
+        if self.do_download_images:
+            self.update_information("Phase 1/3: Starting Chrome...", 0)
+            if self.start_browser():
+                self.update_information("Phase 1/3: Downloading images...", 0)
+                self.update_all_information()
+                self.always_switch_to_main_window_thread = Thread(
+                    target=self.always_switch_to_main_window, daemon=True)
+                self.always_switch_to_main_window_thread.start()
+                with LogContext("Download images", log):
+                    self.download_images_data()
+            else:
+                self.update_information("Phase 1/3: Download skipped (Chrome not started)", 3)
         else:
-            reason = "Chrome not initialized" if not self.driver else "disabled in settings"
-            self.update_information(f"Phase 1/3: Download skipped ({reason})", 3)
+            self.update_information("Phase 1/3: Download skipped (disabled in settings)", 3)
 
         if self.project_data["configuration"]["annotation"] and self.do_annotation:
             self.update_information("Phase 2/3: Creating annotations...", 0)
@@ -419,7 +344,7 @@ class AutoDataset(QObject):
         else:
             self.update_information("AutoDataset finished successfully\n\n\n", 1)
 
-        self._is_running, self._stop_collector = False, False
+        self._is_running = False
         if self.always_switch_to_main_window_thread:
             self.always_switch_to_main_window_thread.join()
         self.finished.emit()
@@ -428,4 +353,6 @@ class AutoDataset(QObject):
     @pyqtSlot()
     def stop(self):
         self.update_information("User requested stop", 2)
-        self._is_running, self._stop_collector = False, True
+        self._is_running = False
+        if self._stop_event:
+            self._stop_event.set()
