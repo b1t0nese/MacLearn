@@ -8,11 +8,11 @@ import sys
 import os
 
 from project_module.project_manager import Project, get_dataset_statistics
-from autodataset_module.autodataset import AutoDataset
 from project_module.dataset_manager import AVAILABLE_FORMATS
+from autodataset_module.photoshop import visualize_bbox, open_image
+from autodataset_module.autodataset import AutoDataset
 from interface_module.window import MainWindowUI, StatisticsWindow
 from interface_module.logs_window import LogsUI
-from autodataset_module.photoshop import visualize_bbox, open_image
 from pcfuncs import *
 from logger import get_logger, log_call, LogContext, SessionLogger, install_exception_hook
 
@@ -483,7 +483,7 @@ def main():
     arg_parser = argparse.ArgumentParser(
         "MacLearn", description="A program that will automatically assemble a "+
         "high-quality dataset of thousands of images for you in a matter of minutes.")
-    arg_parser.add_argument("project_path", nargs='?', default=None,
+    arg_parser.add_argument("--project_path", nargs='?', default=None,
                             help="path of your MacLearn project (skip this to choose project from explorer)")
     arg_parser.add_argument("--chrome-version", type=int, default=None,
                             help="version of Chrome installed on your computer (you can skip this, if the program is working fine)")

@@ -50,7 +50,7 @@ class YandexImagesSource(BaseImageSource):
 
 
     def _open_search_page(self, search_query: str, example_image_path: str, stop_check) -> bool:
-        if not (example_image_path and self.clipboard_manager):
+        if not (example_image_path and self.clipboard_manager and self.clipboard_manager.available):
             return False
         try:
             self.driver.get(self.SEARCH_URL)

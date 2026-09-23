@@ -7,13 +7,13 @@ from undetected_chromedriver import Chrome, ChromeOptions
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.core.driver_cache import DriverCacheManager
 
-from pcfuncs import get_appdata_dir
+from pcfuncs import get_appdata_dir, get_executable_name, make_executable
 from logger import get_logger
 log = get_logger("autodataset")
 
 
 
-chromedriver_cache_path = os.path.join(get_appdata_dir(), "chromedriver.exe")
+chromedriver_cache_path = os.path.join(get_appdata_dir(), get_executable_name("chromedriver"))
 
 def get_session_dir(session_name: str = "default") -> str:
     return get_appdata_dir("cache", "browser_sessions", session_name)
@@ -165,10 +165,12 @@ class ChromeBrowser(QObject):
         self.used_cached_driver = False
         if self.chromedriver_path:
             log.debug("Using chromedriver from argument: %s", self.chromedriver_path)
+            make_executable(self.chromedriver_path)
             return self.chromedriver_path
         if os.path.isfile(chromedriver_cache_path):
             self.used_cached_driver = True
             log.info("✓ Using cached chromedriver: %s", chromedriver_cache_path)
+            make_executable(chromedriver_cache_path)
             return chromedriver_cache_path
         try:
             downloaded_path = self._download_driver()
@@ -176,6 +178,7 @@ class ChromeBrowser(QObject):
             log.warning("⚠ Could not download chromedriver, undetected_chromedriver will handle it: %s", e)
             return None
         shutil.copy2(downloaded_path, chromedriver_cache_path)
+        make_executable(chromedriver_cache_path)
         self.used_cached_driver = True
         log.info("✓ chromedriver cached: %s", chromedriver_cache_path)
         return chromedriver_cache_path

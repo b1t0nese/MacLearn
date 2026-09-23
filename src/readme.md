@@ -226,35 +226,85 @@ install_exception_hook(log)         # Глобальный перехват ис
 
 ## `src/pcfuncs.py`
 
-**Роль:** низкоуровневые утилиты платформы.
+**Роль:** низкоуровневые утилиты платформы. Модуль **определяет ОС при импорте** и автоматически
+выбирает подходящие реализации функций (буфер обмена, менеджер окон, запуск процессов), поэтому
+остальной код не содержит проверок платформы.
+
+### Определение ОС (при импорте)
+
+| Переменная | Описание |
+|------------|----------|
+| `SYSTEM` | `"windows"`, `"macos"` (`darwin`), `"linux"` или `"unknown"` |
+| `IS_WINDOWS` / `IS_MACOS` / `IS_LINUX` | Флаги текущей платформы |
+| `EXECUTABLE_SUFFIX` | `".exe"` в Windows, `""` в остальных |
 
 ### Функции
 
 | Функция | Описание |
 |---------|----------|
+| `get_executable_name(name)` | `chromedriver` → `chromedriver.exe` (Windows) |
+| `make_executable(path)` | `chmod +x` в POSIX, ничего в Windows |
+| `is_executable_available(*names)` | Есть ли программа в PATH |
+| `get_appdata_root(local)` / `get_appdata_dir(*subdirs, local, create)` | Папка данных приложения |
 | `launch_new_instance()` | Запуск нового независимого экземпляра приложения |
+| `pil_image_to_array(image)` | `PIL.Image` → BGR `np.ndarray` |
+| `save_temp_image(image)` / `remove_temp_file(path)` | Временный файл изображения (для внешних утилит) |
+
+**Папка данных приложения** (`get_appdata_dir`):
+
+| ОС | Путь |
+|----|------|
+| Windows | `%APPDATA%\maclearn\...` (`%LOCALAPPDATA%` при `local=True`) |
+| macOS | `~/Library/Application Support/maclearn/...` (`~/Library/Caches` при `local=True`) |
+| Linux | `$XDG_CONFIG_HOME/maclearn/...` или `~/.config/maclearn/...` (`$XDG_CACHE_HOME` / `~/.cache` при `local=True`) |
+
+### Буфер обмена
+
+Бэкенды выбираются при импорте модуля: `CLIPBOARD_BACKENDS` → `CLIPBOARD_BACKEND`.
+
+| Бэкенд | ОС | Реализация |
+|--------|----|------------|
+| `WindowsClipboard` | Windows | `win32clipboard` (DIB) + PIL для чтения |
+| `MacOSClipboard` | macOS | `osascript`/`pbcopy` + PIL для чтения |
+| `LinuxClipboard` | Linux | `wl-copy`/`wl-paste` (Wayland) или `xclip` (X11) |
+| `BaseClipboard` | прочие | заглушка (`available = False`) |
 
 ### Класс `ClipboardManager`
 
-Работа с буфером обмена Windows.
-
-| Метод | Описание |
-|-------|----------|
-| `__init__()` | Определение ОС, импорт win32 |
-| `copy_image_to_clipboard(image)` | Копирует изображение (str путь или np.ndarray) в буфер |
-| `_copy_windows(image)` | Внутренняя реализация для Windows (DIB через win32clipboard) |
+Фасад над бэкендом: `available`, `copy_image_to_clipboard(image)` (str путь или `np.ndarray`),
+`copy_text_to_clipboard(text)`, `get_image_from_clipboard()` (BGR `np.ndarray` или `None`).
 
 ### Класс `ClipboardImageWatcher`
 
-Мониторинг буфера обмена на новые изображения.
+Мониторинг буфера обмена на новые изображения (через `ClipboardManager`).
 
 | Метод | Описание |
 |-------|----------|
-| `__init__(callback, check_interval)` | Колбэк при новом изображении |
+| `__init__(callback, check_interval, clipboard_manager)` | Колбэк при новом изображении |
 | `get_image_hash(image)` | MD5 миниатюры для сравнения |
 | `check_clipboard()` | Одиночная проверка буфера |
 | `start()` | Запуск фонового потока мониторинга |
 | `stop()` | Остановка потока |
+
+### Менеджер окон (встраивание чужих окон)
+
+Бэкенды выбираются при импорте: `WINDOW_BACKENDS` → `WINDOW_MANAGER`; флаг `CAN_EMBED_PROGRAMS`.
+
+| Бэкенд | ОС | Реализация |
+|--------|----|------------|
+| `WindowsWindowManager` | Windows | Win32 API (`win32gui`, `win32process`, `win32con`, `psutil`) |
+| `LinuxWindowManager` | Linux (X11) | `xdotool` (`search`, `windowreparent`, `windowmove`, `windowsize`, `windowmap`) |
+| `NullWindowManager` | macOS и прочие | заглушка, `available = False` |
+
+| Метод | Описание |
+|-------|----------|
+| `find(process_name, pid)` | Найти окно процесса |
+| `windows_by_pid(pid)` | Все видимые окна процесса |
+| `restore(window)` | Снять состояние maximized/minimized (иначе `MoveWindow` не действует) |
+| `link(window, parent)` | Встроить окно в родительское |
+| `set_borderless(window)` | Убрать рамку, заголовок, системные кнопки |
+| `move(window, x, y, width, height)` | Переместить и изменить размер |
+| `show(window)` | Показать окно |
 
 ---
 

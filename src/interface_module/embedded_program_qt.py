@@ -83,7 +83,10 @@ class EmbeddedProgramWidget(QWidget):
 
 
     def move_window(self):
-        if self.program_hwnd and not self.locked_resize:
+        if self.program_hwnd:
+            if win32gui.GetWindowPlacement(self.program_hwnd)[1] in (
+                    win32con.SW_SHOWMAXIMIZED, win32con.SW_SHOWMINIMIZED):
+                win32gui.ShowWindow(self.program_hwnd, win32con.SW_RESTORE)
             win32gui.MoveWindow(
                 self.program_hwnd, 0, 0,
                 self.width(), self.height(), True)

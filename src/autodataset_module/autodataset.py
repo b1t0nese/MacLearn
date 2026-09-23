@@ -95,7 +95,6 @@ class AutoDataset(QObject):
 
 
     def start_browser(self) -> bool:
-        """Отложенный запуск Chrome: браузер стартует только тогда, когда он реально нужен."""
         return self.browser.start()
 
 

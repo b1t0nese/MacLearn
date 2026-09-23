@@ -9,7 +9,10 @@ import numpy as np
 import sys
 import os
 
-from .embedded_program_qt import EmbeddedProgramWidget
+try:
+    from .embedded_program_qt import EmbeddedProgramWidget
+except ModuleNotFoundError:
+    from pcfuncs import BaseWindowManager as EmbeddedProgramWidget
 
 
 if getattr(sys, 'frozen', False):
