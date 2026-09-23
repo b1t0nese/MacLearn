@@ -132,6 +132,11 @@
 с кэшированным драйвером (например, драйвер устарел), кэш сбрасывается и выполняется повторная
 попытка с новой сессией. Профиль сессии хранится между запусками (`user_data_dir` в `undetected_chromedriver`).
 
+Папка данных определяется `pcfuncs.get_appdata_dir()` (Windows — `%APPDATA%\maclearn`, macOS —
+`~/Library/Application Support/maclearn`, Linux — `~/.config/maclearn`). Имя драйвера берётся из
+`pcfuncs.get_executable_name("chromedriver")` — в POSIX-системах это `chromedriver` без расширения,
+и ему выдаются права на запуск (`pcfuncs.make_executable()`).
+
 ---
 
 ## `sources`
