@@ -25,15 +25,39 @@ QWidget {
        <property name="styleSheet">
         <string notr="true">
 QCheckBox {
-    border: 2px solid #ccc;
-    border-radius: 5px;
+    border: none;
+    background: transparent;
     padding: 6px;
+    font-size: 24px;
+    font-weight: bold;
+    color: transparent;
 }
-QCheckBox::indicator {
-    width: 20px;
-    height: 20px;
+QCheckBox:checked {
+    color: #4CAF50;
+}
+QCheckBox:!checked {
+    color: rgba(223, 225, 226, 0.22);
+}
+QCheckBox::indicator,
+QCheckBox::indicator:checked,
+QCheckBox::indicator:unchecked,
+QCheckBox::indicator:indeterminate,
+QCheckBox::indicator:hover,
+QCheckBox::indicator:focus,
+QCheckBox::indicator:pressed {
+    width: 0px;
+    height: 0px;
+    margin: 0px;
+    image: none;
+    border: none;
 }
         </string>
+       </property>
+       <property name="toolTip">
+        <string>Включить или отключить класс</string>
+       </property>
+       <property name="text">
+        <string>✔</string>
        </property>
        <property name="checked">
         <bool>true</bool>

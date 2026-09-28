@@ -138,11 +138,6 @@
          <layout class="QHBoxLayout" name="horizontalLayout_2">
           <item>
            <widget class="QLabel" name="label_2">
-            <property name="font">
-             <font>
-              <pointsize>8</pointsize>
-             </font>
-            </property>
             <property name="styleSheet">
              <string notr="true">font-size: 13px;</string>
             </property>
@@ -176,10 +171,8 @@
          <layout class="QHBoxLayout" name="horizontalLayout_3">
           <item>
            <widget class="QLabel" name="label_3">
-            <property name="font">
-             <font>
-              <pointsize>9</pointsize>
-             </font>
+            <property name="styleSheet">
+             <string notr="true">font-size: 13px;</string>
             </property>
             <property name="text">
              <string>Размер изображений:</string>
@@ -188,10 +181,8 @@
           </item>
           <item>
            <widget class="QComboBox" name="combo_images_size">
-            <property name="font">
-             <font>
-              <pointsize>9</pointsize>
-             </font>
+            <property name="styleSheet">
+             <string notr="true">font-size: 13px;</string>
             </property>
             <item>
              <property name="text">

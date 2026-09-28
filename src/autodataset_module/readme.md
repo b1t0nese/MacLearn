@@ -47,6 +47,7 @@
 | `__init__(project_manager, chromedriver_path, chrome_version, chrome_headless, chrome_session)` | Инициализация воркера и `ChromeBrowser` (Chrome при этом не запускается) |
 | `start_browser()` | Отложенный запуск Chrome (`self.browser.start()`) |
 | `close()` | Закрытие источника и браузера |
+| `detach_from_thread()` | Возврат воркера в поток приложения (вызывается сигналом `finished` из рабочего потока) |
 | `update_project_data()` | Загрузить конфигурацию проекта |
 | `update_all_information(clear)` | Обновить статусы/счётчики для UI |
 | `run()` | Главный метод потока (3 фазы) |
@@ -118,6 +119,7 @@
 | `switch_to_main_window()` | Переключение на первую вкладку |
 | `clear_driver_cache()` | Удалить кэшированный chromedriver |
 | `clear_session_cache()` | Удалить папку сессии браузера |
+| `kill_session_processes(session_dir)` | Закрыть процессы браузера, запущенные для папки сессии (окно-сирота после ошибки старта) |
 
 #### Кэш приложения
 
@@ -135,7 +137,23 @@
 Папка данных определяется `pcfuncs.get_appdata_dir()` (Windows — `%APPDATA%\maclearn`, macOS —
 `~/Library/Application Support/maclearn`, Linux — `~/.config/maclearn`). Имя драйвера берётся из
 `pcfuncs.get_executable_name("chromedriver")` — в POSIX-системах это `chromedriver` без расширения,
-и ему выдаются права на запуск (`pcfuncs.make_executable()`).
+и ему выдаются права на запуск и валидная подпись (`pcfuncs.prepare_executable()`).
+
+#### macOS: подпись `chromedriver`
+
+`undetected_chromedriver` перед запуском патчит chromedriver «на месте», из-за чего ломается подпись
+кода Google, и macOS убивает драйвер сигналом `SIGKILL` (`Status code was: -9`, в системном логе —
+`CODE SIGNING: cs_invalid_page ... sending SIGKILL`). Поэтому драйвер патчится заранее
+(`_prepare_driver_for_macos()`), сразу после патча получает ad-hoc подпись (`pcfuncs.sign_macos_binary()`),
+а патчер `undetected_chromedriver` при следующем вызове видит свой маркер (`undetected chromedriver`)
+и файл больше не меняет.
+
+#### Окно-сирота после ошибки старта
+
+`undetected_chromedriver` запускает Chrome **до** старта chromedriver, поэтому при любой ошибке старта
+остаётся окно браузера, хотя UI считает, что Chrome не запущен. Метод `kill_session_processes()`
+(через `pcfuncs.kill_processes_by_marker()`) закрывает такие процессы по `--user-data-dir=<папка сессии>`:
+он вызывается перед стартом и после неудачной попытки.
 
 ---
 

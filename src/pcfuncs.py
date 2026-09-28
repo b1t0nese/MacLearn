@@ -1,11 +1,11 @@
 from platform import system as platf_system
 from PIL import Image, ImageGrab
-from plyer import notification
 import numpy as np
 import subprocess
 import threading
 import hashlib
 import shutil
+import signal
 import tempfile
 import time
 import cv2
@@ -41,6 +41,117 @@ def make_executable(path: str) -> bool:
 
 def is_executable_available(*names: str) -> bool:
     return any(shutil.which(name) for name in names)
+
+
+def sign_macos_binary(path: str) -> bool:
+    """Выдать бинарю в macOS ad-hoc подпись кода (иначе он будет убит).
+
+    macOS отправляет SIGKILL процессам с повреждённой подписью. Именно это
+    происходит с chromedriver: `undetected_chromedriver` патчит бинарь «на месте»
+    и ломает подпись Google, поэтому запуск падает с `Status code was: -9`.
+    """
+    if not IS_MACOS or not os.path.isfile(path):
+        return False
+    try:
+        subprocess.run(["/usr/bin/xattr", "-c", path], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=30)
+        result = subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", path],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                timeout=120)
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def prepare_executable(path: str) -> bool:
+    """Подготовить скачанный бинарь к запуску: права на запуск и (в macOS) валидная подпись."""
+    if not os.path.isfile(path):
+        return False
+    make_executable(path)
+    if IS_MACOS:
+        return sign_macos_binary(path)
+    return True
+
+
+def kill_processes_by_marker(marker: str, exclude_pid: int = None) -> int:
+    """Завершить процессы, в командной строке которых встречается `marker`.
+
+    Нужно, чтобы закрыть окно браузера, оставшееся после неудачного старта:
+    `undetected_chromedriver` запускает Chrome ещё до старта chromedriver.
+    Возвращает количество завершённых процессов.
+    """
+    if not marker:
+        return 0
+    exclude_pid = exclude_pid or os.getpid()
+    if IS_WINDOWS:
+        script = ("$m = '%s'; Get-CimInstance Win32_Process | "
+                  "Where-Object { $_.CommandLine -like ('*' + $m + '*') } | "
+                  "ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Write-Output $_.ProcessId }"
+                  % marker)
+        try:
+            result = subprocess.run(["powershell", "-NoProfile", "-Command", script],
+                                    capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return 0
+        return len([line for line in result.stdout.split() if line.isdigit()])
+    try:
+        result = subprocess.run(["ps", "-eo", "pid=,command="],
+                                capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    killed = 0
+    for line in result.stdout.splitlines():
+        pid_text, _, command = line.strip().partition(" ")
+        if marker not in command or not pid_text.isdigit():
+            continue
+        pid = int(pid_text)
+        if pid == exclude_pid:
+            continue
+        try:
+            os.kill(pid, signal.SIGKILL)
+            killed += 1
+        except OSError:
+            continue
+    return killed
+
+
+def _notify_via_osascript(message: str, title: str) -> bool:
+    script = 'display notification "%s" with title "%s"' % (
+        message.replace("\\", "\\\\").replace('"', '\\"'),
+        title.replace("\\", "\\\\").replace('"', '\\"'))
+    try:
+        result = subprocess.run(["/usr/bin/osascript", "-e", script],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                timeout=15)
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _log_notify_error(error: Exception):
+    try:
+        from logger import get_logger
+        get_logger("pcfuncs").warning("⚠ Desktop notifications are not available: %s", error)
+    except Exception:
+        pass
+
+
+def notify(message: str, title: str = "MacLearn", app_name: str = "MacLearn") -> bool:
+    """Показать системное уведомление, никогда не ломая приложение.
+
+    В macOS используется нативный `osascript`: бэкенд `plyer` требует `pyobjus`, а без
+    него не только падает с `NotImplementedError`, но и печатает трейсбек в консоль.
+    Остальные системы уведомляются через `plyer`.
+    """
+    if IS_MACOS and _notify_via_osascript(message, title):
+        return True
+    try:
+        from plyer import notification as plyer_notification
+        plyer_notification.notify(message=message, title=title, app_name=app_name)
+        return True
+    except Exception as error:
+        _log_notify_error(error)
+    return False
 
 
 

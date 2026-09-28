@@ -307,6 +307,10 @@ class Project(Dataset):
             os.remove(zip_path)
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             for root, dirs, files in os.walk(self._working_path):
+                for directory in dirs:
+                    dir_path = os.path.join(root, directory)
+                    arcname = os.path.relpath(dir_path, self._working_path)
+                    zf.write(dir_path, arcname)
                 for file in files:
                     full_path = os.path.join(root, file)
                     arcname = os.path.relpath(full_path, self._working_path)

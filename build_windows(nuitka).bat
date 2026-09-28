@@ -26,7 +26,7 @@ build_env\Scripts\python.exe -m nuitka --jobs=12 --standalone ^
     --windows-console-mode=force --include-package=onnxruntime ^
     --enable-plugin=pyqt6 --module-parameter=numba-disable-jit=yes ^
     --include-data-dir=src/interface_module/uis=interface_module/uis ^
-    --output-dir=build --output-filename=MacLearn.exe src/main.pyw
+    --output-dir=build --output-filename=MacLearn.exe src/main.py
 if !errorlevel! neq 0 (
     echo.
     echo "[ERROR] Build failed with code !errorlevel!!"
