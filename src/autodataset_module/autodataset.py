@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QCoreApplication
 from requests import get as get_request
 from threading import Event, Thread
 from time import sleep
@@ -50,16 +50,15 @@ class AutoDataset(QObject):
 
 
     def __init__(self, project_manager: Project, chromedriver_path: str=None,
-                 chrome_version: int=None, chrome_headless: bool=False,
-                 chrome_session: str="default"):
+                 chrome_version: int=None, chrome_no_headless: bool=False, chrome_session: str="default"):
         super().__init__()
         self._is_running = False
         self._stop_event = None
         self._image_downloaded = True
-        log.info("▶ Initializing AutoDataset (headless=%s, chrome_version=%s)", chrome_headless, chrome_version)
+        log.info("▶ Initializing AutoDataset (headless=%s, chrome_version=%s)", not chrome_no_headless, chrome_version)
 
         self.browser = ChromeBrowser(chromedriver_path, chrome_version,
-                                     chrome_headless, chrome_session, parent=self)
+                                     not chrome_no_headless, chrome_session, parent=self)
         self.clipboard_manager = self._create_clipboard_manager()
         self.source = None
 
@@ -92,6 +91,19 @@ class AutoDataset(QObject):
             self.source = None
         self.browser.stop()
         log.info("✓ AutoDataset closed")
+
+
+    def detach_from_thread(self):
+        """Вернуть воркер в поток приложения перед завершением рабочего потока.
+
+        Qt позволяет менять поток объекта только из его собственного потока, поэтому метод
+        вызывается сигналом `finished` (эмитится внутри рабочего потока). Без этого
+        `App.delete_autodataset_thread()` не может вернуть воркер и он остаётся привязан
+        к уже завершённому QThread — следующий запуск не начнётся.
+        """
+        app = QCoreApplication.instance()
+        if app is not None and self.thread() != app.thread():
+            self.moveToThread(app.thread())
 
 
     def start_browser(self) -> bool:

@@ -9,7 +9,7 @@
 - [Архитектура](#архитектура)
 - [Структура проекта](#структура-проекта)
 - [Корневые модули](#корневые-модули)
-  - [`src/main.pyw` — точка входа, главный контроллер](#srcmainpyw)
+  - [`src/main.py` — точка входа, главный контроллер](#srcmainpy)
   - [`src/logger.py` — система логирования](#srcloggerpy)
   - [`src/pcfuncs.py` — утилиты](#srcpcfuncspy)
 - [Модули](#модули)
@@ -25,7 +25,7 @@
 
 ```
                 ┌─────────────────────────┐
-                │      main.pyw (App)     │
+                │      main.py (App)      │
                 │   Главный контроллер    │
                 └──────┬─────────┬────────┘
                        │         │
@@ -40,7 +40,7 @@
           └──────────────────┘  └───────────────────┘
 ```
 
-`main.pyw` — оркестратор: связывает UI, проекта и автодатасет.
+`main.py` — оркестратор: связывает UI, проекта и автодатасет.
 `logger.py` — центральная система логирования, используется всеми модулями.
 `pcfuncs.py` — низкоуровневые утилиты (буфер обмена, процессы).
 
@@ -54,7 +54,7 @@ maclearn/
 ├── build_windows(nuitka).bat           # Сборка Windows (Nuitka + UPX)
 ├── upx_build_compress.bat              # UPX-сжатие
 └── src/
-    ├── main.pyw                        # Точка входа, класс App
+    ├── main.py                         # Точка входа, класс App
     ├── logger.py                       # Система логирования
     ├── pcfuncs.py                      # Утилиты
     ├── start.bat                       # Быстрый запуск
@@ -93,7 +93,7 @@ maclearn/
 
 # Корневые модули
 
-## `src/main.pyw`
+## `src/main.py`
 
 **Роль:** точка входа и главный контроллер приложения.
 
@@ -146,18 +146,29 @@ install_exception_hook(log)         # Глобальный перехват ис
 | `init_config_window()` | Подключение сигналов UI-элементов |
 | `init_project_conf_in_window()` | Загрузка конфигурации проекта в UI |
 | `update_dataset_view_in_window()` | Синхронизация UI датасета с БД |
-| `open_project(project_path)` | Открыть/создать проект |
+| `open_project(project_path)` | Открыть проект |
+| `new_project()` | Создать пустой проект `.maclproj` и открыть его |
 | `open_project_as_dir()` | Открыть проект как папку (диалог) |
 | `save_project()` | Сохранение конфигурации из UI в БД |
 | `save_project_as()` | Сохранить как `.maclproj` (zip) |
 | `save_project_as_dir()` | Сохранить как папку |
-| `export_dataset_data(get_path)` | Экспорт датасета по выбранному формату |
+| `export_dataset_data()` | Экспорт датасета по выбранному формату |
 | `toggle_autodataset_work()` | Запуск/остановка автодатасета |
 | `start_autodataset()` | Запуск воркера в QThread |
 | `stop_autodataset()` | Остановка воркера |
 | `on_autodataset_finished()` | Колбэк по завершении + уведомление |
 | `autodataset_worker_connect_signals()` | Подключение сигналов воркера к UI |
 | `autodataset_worker_disconnect_signals()` | Отключение сигналов |
+
+#### Поток воркера
+
+`start_autodataset()` создаёт новый `QThread`, переносит в него `autodataset_worker` (`moveToThread`)
+и подключает сигналы: `started` → `run()`, `finished` → `thread.quit()` и
+`finished` → `worker.detach_from_thread()`. Последняя связка обязательна: Qt разрешает менять поток
+объекта только из его собственного потока, поэтому воркер возвращается в поток приложения ещё
+**внутри** рабочего потока. Иначе `delete_autodataset_thread()` не сможет его вернуть: в лог
+попадёт `QObject::moveToThread: Current thread ... is not the object's thread`, а воркер останется
+привязанным к уже завершённому `QThread` и следующий запуск не начнётся.
 
 ### Функция `main()`
 
@@ -244,6 +255,10 @@ install_exception_hook(log)         # Глобальный перехват ис
 |---------|----------|
 | `get_executable_name(name)` | `chromedriver` → `chromedriver.exe` (Windows) |
 | `make_executable(path)` | `chmod +x` в POSIX, ничего в Windows |
+| `prepare_executable(path)` | `make_executable` + валидная ad-hoc подпись в macOS |
+| `sign_macos_binary(path)` | `codesign --force --sign -`: без валидной подписи macOS убивает бинарь (`SIGKILL`) |
+| `kill_processes_by_marker(marker, exclude_pid)` | Завершить процессы, в командной строке которых есть `marker` |
+| `notify(message, title, app_name)` | Системное уведомление: macOS — `osascript`, остальные ОС — `plyer` |
 | `is_executable_available(*names)` | Есть ли программа в PATH |
 | `get_appdata_root(local)` / `get_appdata_dir(*subdirs, local, create)` | Папка данных приложения |
 | `launch_new_instance()` | Запуск нового независимого экземпляра приложения |
@@ -386,7 +401,7 @@ start_autodataset()
 
 ```
 ┌────────────┐  Project/AutoDataset (import)  ┌───────────────────┐
-│  main.pyw  │ ──────────────────────────────►│ project_module    │
+│  main.py   │ ──────────────────────────────►│ project_module    │
 │   (App)    │                                │ (Project, export) │
 └────────────┘                                └───────────────────┘
       │  import                                     ▲
@@ -403,7 +418,7 @@ start_autodataset()
 └─────────────────────┘                └──────────────────────┘
 ```
 
-- **main.pyw** — оркестратор, не имеет своей бизнес-логики, только связывает.
+- **main.py** — оркестратор, не имеет своей бизнес-логики, только связывает.
 - **project_module** — не зависит от UI, чистая работа с данными.
 - **autodataset_module** — зависит от project_module (Project) и pcfuncs (clipboard).
 - **interface_module** — зависит от logger (handler для окна логов), автодатасета (сигналы).

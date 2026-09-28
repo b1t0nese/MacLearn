@@ -7,7 +7,8 @@ from undetected_chromedriver import Chrome, ChromeOptions
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.core.driver_cache import DriverCacheManager
 
-from pcfuncs import get_appdata_dir, get_executable_name, make_executable
+from pcfuncs import (get_appdata_dir, get_executable_name, prepare_executable,
+                     sign_macos_binary, kill_processes_by_marker, IS_MACOS)
 from logger import get_logger
 log = get_logger("autodataset")
 
@@ -50,19 +51,37 @@ class ChromeBrowser(QObject):
     def start(self) -> bool:
         if self.is_ready():
             return True
+        self.kill_session_processes()
         log.info("▶ Starting Chrome (session dir: %s)", self.session_dir)
-        error = self._start_driver(self.session_dir)
+        session_dir = self.session_dir
+        error = self._start_driver(session_dir)
         if error and self.used_cached_driver:
             log.warning("⚠ Cached chromedriver failed (%s), refreshing cache and retrying", error)
             self.clear_driver_cache()
-            error = self._start_driver(get_session_dir(f"{self.session_name}_{uuid.uuid4().hex[:8]}"))
+            session_dir = get_session_dir(f"{self.session_name}_{uuid.uuid4().hex[:8]}")
+            error = self._start_driver(session_dir)
         if error:
+            # undetected_chromedriver запускает Chrome ещё до старта chromedriver, поэтому
+            # после ошибки остаётся «висящее» окно браузера, которое нужно закрыть.
+            self.kill_session_processes(self.session_dir)
+            if session_dir != self.session_dir:
+                self.kill_session_processes(session_dir)
             log.error("✗ Chrome start failed: %s", error)
             self.failed.emit(str(error))
             return False
         log.info("✓ Chrome started (PID=%s)", self.chrome_pid)
         self.ready.emit(self.chrome_pid or 0)
         return True
+
+
+    def kill_session_processes(self, session_dir: str = None) -> int:
+        """Закрыть процессы браузера, запущенные для папки сессии."""
+        session_dir = session_dir or self.session_dir
+        killed = kill_processes_by_marker(f"--user-data-dir={session_dir}")
+        if killed:
+            log.warning("⚠ Closed %d leftover browser process(es) for session dir: %s",
+                        killed, session_dir)
+        return killed
 
 
     def stop(self):
@@ -126,6 +145,8 @@ class ChromeBrowser(QObject):
         try:
             os.makedirs(session_dir, exist_ok=True)
             driver_path = self._resolve_driver_path()
+            if driver_path:
+                self._prepare_driver_for_macos(driver_path)
             driver_kwargs = {"version_main": self.chrome_version, "user_data_dir": session_dir}
             if driver_path:
                 driver_kwargs["driver_executable_path"] = driver_path
@@ -136,6 +157,29 @@ class ChromeBrowser(QObject):
             log.error("✗ Chrome driver error: %s", e, exc_info=True)
             self.driver, self.chrome_pid = None, None
             return str(e)
+
+
+    def _prepare_driver_for_macos(self, driver_path: str) -> bool:
+        """Пропатчить chromedriver и заново подписать его (актуально только для macOS).
+
+        `undetected_chromedriver` правит бинарь «на месте», из-за чего ломается подпись кода,
+        и macOS убивает драйвер с кодом -9. Поэтому патчим его сами и сразу выдаём ad-hoc
+        подпись: при следующем вызове патчер увидит свой маркер и больше файл не тронет.
+        """
+        if not IS_MACOS:
+            return True
+        try:
+            from undetected_chromedriver import Patcher
+            patcher = Patcher(executable_path=driver_path, version_main=self.chrome_version or 0)
+            if not patcher.is_binary_patched():
+                patcher.auto()
+                log.info("✓ chromedriver patched: %s", driver_path)
+        except Exception as e:
+            log.warning("⚠ Could not patch chromedriver: %s", e)
+        if sign_macos_binary(driver_path):
+            return True
+        log.error("✗ chromedriver is not signed, macOS will kill it (SIGKILL): %s", driver_path)
+        return False
 
 
     def _get_driver_pid(self) -> int | None:
@@ -165,12 +209,12 @@ class ChromeBrowser(QObject):
         self.used_cached_driver = False
         if self.chromedriver_path:
             log.debug("Using chromedriver from argument: %s", self.chromedriver_path)
-            make_executable(self.chromedriver_path)
+            prepare_executable(self.chromedriver_path)
             return self.chromedriver_path
         if os.path.isfile(chromedriver_cache_path):
             self.used_cached_driver = True
             log.info("✓ Using cached chromedriver: %s", chromedriver_cache_path)
-            make_executable(chromedriver_cache_path)
+            prepare_executable(chromedriver_cache_path)
             return chromedriver_cache_path
         try:
             downloaded_path = self._download_driver()
@@ -178,7 +222,7 @@ class ChromeBrowser(QObject):
             log.warning("⚠ Could not download chromedriver, undetected_chromedriver will handle it: %s", e)
             return None
         shutil.copy2(downloaded_path, chromedriver_cache_path)
-        make_executable(chromedriver_cache_path)
+        prepare_executable(chromedriver_cache_path)
         self.used_cached_driver = True
         log.info("✓ chromedriver cached: %s", chromedriver_cache_path)
         return chromedriver_cache_path

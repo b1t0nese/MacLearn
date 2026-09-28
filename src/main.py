@@ -4,6 +4,7 @@ from PyQt6.QtCore import QThread, QUrl
 import qdarkstyle
 import argparse
 import shutil
+import tempfile
 import sys
 import os
 
@@ -101,7 +102,7 @@ class App:
         with LogContext("AutoDataset initialization", log):
             self.autodataset_worker = AutoDataset(
                 self.project_data, self.config["chromedriver_path"],
-                self.config["chrome_version"], self.config["chrome_headless"])
+                self.config["chrome_version"], self.config["chrome_no_headless"])
             log.info("✓ AutoDataset ready (Chrome will be started on demand)")
 
         with LogContext("UI initialization", log):
@@ -127,12 +128,12 @@ class App:
         self.autodataset_worker_connect_signals(); at = self.windowUI.autodataset_tab; at.orgShowEvent = at.showEvent
         at.showEvent = lambda e: [at.orgShowEvent(e), self.autodataset_worker.update_all_information()][0]
 
+        self.windowUI.actionNew.triggered.connect(self.new_project)
         self.windowUI.actionOpen.triggered.connect(self.open_project)
         self.windowUI.actionOpen_As_Dir.triggered.connect(self.open_project_as_dir)
         self.windowUI.actionSave.triggered.connect(self.save_project)
         self.windowUI.actionSave_As.triggered.connect(self.save_project_as)
         self.windowUI.actionSave_As_Dir.triggered.connect(self.save_project_as_dir)
-        self.windowUI.actionExport.triggered.connect(lambda e: self.export_dataset_data(e, get_path=False))
         self.windowUI.actionExport_As.triggered.connect(self.export_dataset_data)
         self.windowUI.actionRestart.triggered.connect(lambda e: self.open_project(self.project_data.project_path))
         self.windowUI.actionNewWindow.triggered.connect(launch_new_instance)
@@ -287,6 +288,22 @@ class App:
         self.statistics_window.show()
 
 
+    def new_project(self):
+        project_path, ok = QFileDialog.getSaveFileName(
+            self.windowUI, "Новый проект", "Новый проект.maclproj", "MacLearn Project (*.maclproj)")
+        if not ok or not project_path:
+            return
+        if not project_path.endswith('.maclproj'):
+            project_path += '.maclproj'
+        with tempfile.TemporaryDirectory(prefix="maclearn_new_") as temp_dir:
+            empty_project = Project(temp_dir)
+            status, message = empty_project.save_as(project_path)
+            empty_project.close_all_connections()
+        if not status:
+            QMessageBox.warning(self.windowUI, "Ошибка", message)
+            return
+        self.open_project(project_path)
+
     def open_project_as_dir(self) -> bool:
         project_path = QFileDialog.getExistingDirectory(None, "Выберите папку проекта", "")
         if project_path:
@@ -294,17 +311,14 @@ class App:
 
     def open_project(self, project_path: str=None) -> bool:
         if not project_path:
-            project_path, _ = QFileDialog.getSaveFileName(
-                self.windowUI, "Открыть или создать проект (введите название файла, если хотите создать новый)",
-                "", "MacLearn Project (*.maclproj)", options=QFileDialog.Option.DontConfirmOverwrite)
+            project_path, _ = QFileDialog.getOpenFileName(
+                self.windowUI, "Открыть проект", "", "MacLearn Project (*.maclproj)")
         if project_path:
-            if self.windowUI:
-                self.windowUI.close()
-                self.windowUI.deleteLater()
+            previous_window = self.windowUI
             self.windowUI = MainWindowUI()
             if not Project.path_is_project(project_path):
                 reply = QMessageBox.question(
-                    self.windowUI, "Проект не найден или повреждён",
+                    previous_window or self.windowUI, "Проект не найден или повреждён",
                     f'Проект по заданному пути "{project_path}" не найден, или повреждён. '+\
                         'Будут созданы недостающие папки и файлы.',
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
@@ -312,9 +326,14 @@ class App:
                     self.close_application()
                     return False
                 elif reply == QMessageBox.StandardButton.No:
+                    self.windowUI.deleteLater()
+                    self.windowUI = previous_window
                     self.open_project()
                     return False
             self.new_window(project_path)
+            if previous_window:
+                previous_window.close()
+                previous_window.deleteLater()
             return True
         elif not self.windowUI:
             sys.exit()
@@ -384,20 +403,16 @@ class App:
             else:
                 QMessageBox.warning(self.windowUI, "Ошибка", message)
 
-    def export_dataset_data(self, e=None, get_path=True):
-        dataset_path = None
-        if get_path:
-            dataset_path = QFileDialog.getExistingDirectory(None, "Выберите куда разместить датасет.", "")
-            if not dataset_path:
-                return
+    def export_dataset_data(self, e=None):
+        dataset_path = QFileDialog.getExistingDirectory(None, "Выберите куда разместить датасет.", "")
+        if not dataset_path:
+            return
         choiced_format = self.project_data.get_configutation()["dataset_format"]
         DatasetManager = AVAILABLE_FORMATS[choiced_format]
         dataset_manager = DatasetManager.from_project(self.project_data)
         success, message = dataset_manager.export()
         if success:
-            QMessageBox.information(self.windowUI, "Успех" if success else "Неудача", message)
-            if not dataset_path:
-                dataset_path = dataset_manager.get_dataset_path()
+            QMessageBox.information(self.windowUI, "Успех", message)
             success, message = dataset_manager.put_data(dataset_path)
             if success:
                 QMessageBox.information(self.windowUI, "Успех", message)
@@ -427,6 +442,7 @@ class App:
 
         self.autodataset_thread.started.connect(self.autodataset_worker.run)
         self.autodataset_worker.finished.connect(self.autodataset_thread.quit)
+        self.autodataset_worker.finished.connect(self.autodataset_worker.detach_from_thread)
         self.autodataset_thread.finished.connect(self.on_autodataset_finished)
         self.autodataset_worker_connect_signals()
 
@@ -434,14 +450,24 @@ class App:
         self.windowUI.set_btn_start_autodataset_state(True)
 
     def autodataset_worker_disconnect_signals(self):
-        try:
-            self.autodataset_worker.browser.ready.disconnect()
-            self.autodataset_worker.browser.chrome_widget_lock.disconnect()
-            self.autodataset_worker.log_field.disconnect()
-            self.autodataset_worker.cur_image_label.disconnect()
-            self.autodataset_worker.stage_updated.disconnect()
-            self.autodataset_worker.subclass_updated.disconnect()
-        except: pass
+        # Каждый сигнал отключаем отдельно: `disconnect()` без аргументов бросает
+        # TypeError, если сигнал ни к чему не подключён (например, `browser.ready`
+        # в headless-режиме). Общий try/except прерывал отключение остальных
+        # сигналов, и повторный `connect()` создавал дубли подключений — поэтому
+        # сообщения в логе автодатасета и строки таблиц выводились дважды.
+        signals = (
+            self.autodataset_worker.browser.ready,
+            self.autodataset_worker.browser.chrome_widget_lock,
+            self.autodataset_worker.log_field,
+            self.autodataset_worker.cur_image_label,
+            self.autodataset_worker.stage_updated,
+            self.autodataset_worker.subclass_updated,
+        )
+        for signal in signals:
+            try:
+                signal.disconnect()
+            except TypeError:
+                pass
 
     def autodataset_worker_connect_signals(self):
         self.autodataset_worker_disconnect_signals()
@@ -454,12 +480,17 @@ class App:
         self.autodataset_worker.subclass_updated.connect(self.windowUI.autodataset_set_object_status)
 
     def delete_autodataset_thread(self):
+        # Отключаем по одному сигналу: одиночный `except: pass` на общем блоке
+        # прерывал отключение остальных сигналов, если какой-то из них ещё не был
+        # подключён, и обработчики прошлого запуска оставались висеть на воркере.
         if self.autodataset_thread:
-            try:
-                self.autodataset_thread.started.disconnect()
-                self.autodataset_worker.finished.disconnect()
-                self.autodataset_thread.finished.disconnect()
-            except: pass
+            signals = (self.autodataset_thread.started, self.autodataset_worker.finished,
+                       self.autodataset_thread.finished)
+            for signal in signals:
+                try:
+                    signal.disconnect()
+                except TypeError:
+                    pass
         if self.autodataset_worker.thread() != QThread.currentThread():
             self.autodataset_worker.moveToThread(QThread.currentThread())
         if self.autodataset_thread:
@@ -469,7 +500,8 @@ class App:
     def on_autodataset_finished(self):
         self.delete_autodataset_thread()
         self.windowUI.set_btn_start_autodataset_state(False)
-        notification.notify(message='Автодатасет закончил свою работу. Датасет готов к использованию.', app_name='MacLearn', title='MacLearn автодатасет')
+        notify(message='Автодатасет закончил свою работу. Датасет готов к использованию.',
+               app_name='MacLearn', title='MacLearn автодатасет')
 
     def stop_autodataset(self):
         if self.autodataset_worker:
@@ -483,14 +515,14 @@ def main():
     arg_parser = argparse.ArgumentParser(
         "MacLearn", description="A program that will automatically assemble a "+
         "high-quality dataset of thousands of images for you in a matter of minutes.")
-    arg_parser.add_argument("--project_path", nargs='?', default=None,
+    arg_parser.add_argument("--project-path", nargs='?', default=None,
                             help="path of your MacLearn project (skip this to choose project from explorer)")
     arg_parser.add_argument("--chrome-version", type=int, default=None,
                             help="version of Chrome installed on your computer (you can skip this, if the program is working fine)")
     arg_parser.add_argument("--chromedriver-path", type=str, default=None,
                             help="path to your chromedriver (you can skip this, if the program is working fine)")
-    arg_parser.add_argument("-chrome-headless", action='store_true', default=False,
-                            help="if you don't want to see the browser, enable this feature")
+    arg_parser.add_argument("-chrome-no-headless", action='store_true', default=False,
+                            help="if you want to see the browser, enable this feature")
     arguments = arg_parser.parse_args()
 
     application = QApplication(sys.argv)

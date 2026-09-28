@@ -9,10 +9,12 @@ import numpy as np
 import sys
 import os
 
+from pcfuncs import CAN_EMBED_PROGRAMS
+
 try:
     from .embedded_program_qt import EmbeddedProgramWidget
 except ModuleNotFoundError:
-    from pcfuncs import BaseWindowManager as EmbeddedProgramWidget
+    EmbeddedProgramWidget = None
 
 
 if getattr(sys, 'frozen', False):
@@ -456,8 +458,18 @@ class MainWindowUI(QMainWindow):
     def autodataset_initUI(self):
         self.autodataset_tab = QWidget()
         self.autodataset_tab.tab_widget = QTabWidget()
+        # Вкладки нужны только когда Chrome встраивается в окно приложения (не headless и
+        # доступно встраивание экрана). При единственной вкладке полоса вкладок скрывается
+        # сама, а рамка и отступы панели убираются, чтобы "Работа" занимала всё пространство.
+        self.autodataset_tab.tab_widget.setTabBarAutoHide(True)
+        self.autodataset_tab.tab_widget.setDocumentMode(True)
+        self.autodataset_tab.tab_widget.setStyleSheet(
+            "QTabWidget { padding: 0px; } "
+            "QTabWidget::pane, QTabWidget::pane:selected { border: none; background: transparent; }")
         self.autodataset_tab.work_tab = uic.loadUi(os.path.join(uis_path, "tabs", "autodataset_tab.ui"))
         self.autodataset_tab.setLayout(QVBoxLayout())
+        self.autodataset_tab.layout().setContentsMargins(0, 0, 0, 0)
+        self.autodataset_tab.layout().setSpacing(0)
         self.autodataset_tab.tab_widget.addTab(self.autodataset_tab.work_tab, "Работа")
         self.autodataset_tab.layout().addWidget(self.autodataset_tab.tab_widget)
         self.tabWidget.addTab(self.autodataset_tab, "Автодатасет")
@@ -486,7 +498,9 @@ class MainWindowUI(QMainWindow):
         self.autodataset_tab.work_tab.btn_start.setStyleSheet(new_btn_start_style)
 
     def autodataset_embed_chrome(self, chrome_pid: int=0):
-        if not chrome_pid:
+        # Встраивание окна поддерживается только в Windows (нужен win32 API): в macOS и
+        # Linux Chrome работает отдельным окном, поэтому вкладка браузера не создаётся.
+        if not chrome_pid or EmbeddedProgramWidget is None or not CAN_EMBED_PROGRAMS:
             return
         self.add_another_program_to_autodataset("chrome.exe", chrome_pid)
 
