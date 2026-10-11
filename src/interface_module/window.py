@@ -161,11 +161,13 @@ class ClassFieldWidget(QWidget):
         self.objects: list[ObjectCardWidget] = []
 
     def initUI(self, class_name: str=None, enabled: bool=True,
-               import_and_export_buttons: bool=True, name_enabled: bool=True):
+               import_and_export_buttons: bool=True, delete_ann_button: bool=True, name_enabled: bool=True):
         uic.loadUi(os.path.join(uis_path, "widgets", "class_field.ui"), self)
         if not import_and_export_buttons:
             self.class_export_files.deleteLater()
             self.class_import_files.deleteLater()
+        if delete_ann_button:
+            self.class_delete_annotations.deleteLater()
         self.class_checkbox.stateChanged.connect(self.show_class)
         self.class_delete.clicked.connect(self.delete_class)
         self.class_add_object.clicked.connect(lambda: (self.add_object().setVisible(True), self.update_layout()))
@@ -414,7 +416,7 @@ class MainWindowUI(QMainWindow):
 
     def dataset_add_class_field(self, class_name: str, field_name: str, enabled: bool=True) -> ClassFieldWidget:
         field_widget = ClassFieldWidget()
-        field_widget.initUI(field_name, enabled, True, False)
+        field_widget.initUI(field_name, enabled, True, False, False)
         field_widget.class_delete.clicked.disconnect()
         field_widget.class_delete.clicked.connect(
             lambda: self.dataset_delete_class_field_widget(field_widget))
@@ -424,7 +426,7 @@ class MainWindowUI(QMainWindow):
     def dataset_delete_class_field_widget(self, field_widget: ClassFieldWidget, user_call: bool=True) -> bool:
         if user_call:
             reply = QMessageBox.question(
-                self, "Удаление данных класса", "Вы точно хотите удалить эти изображения?",
+                self, "Удаление данных класса", "Вы точно хотите удалить эти данные?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
         if (not user_call) or reply == QMessageBox.StandardButton.Yes:
             field_widget.delete_class()

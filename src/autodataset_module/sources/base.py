@@ -36,11 +36,11 @@ def register_source(name: str=None):
     return decorator
 
 
-def get_source(name: str) -> type[BaseImageSource]:
+def get_source(name: str) -> type[BaseImageSource] | None:
     return AVAILABLE_SOURCES.get(name)
 
 
-def create_source(name: str, browser: ChromeBrowser, clipboard_manager=None) -> BaseImageSource:
+def create_source(name: str, browser: ChromeBrowser, clipboard_manager=None) -> BaseImageSource | None:
     source_class = get_source(name)
     if not source_class:
         return None

@@ -25,10 +25,14 @@ class BaseDataset(Project):
         self.add_skipped_paths()
 
     def clear(self):
+        dataset_path = self.get_full_path("dataset")
+        if not dataset_path:
+            return
         try:
             del self.project_paths["dataset"]
-            shutil.rmtree(self.get_full_path("dataset"))
-        except: pass
+            shutil.rmtree(dataset_path)
+        except FileNotFoundError:
+            pass
 
 
     def put_data(self, dataset_path: str) -> tuple[bool, str]:
@@ -100,7 +104,8 @@ class YOLOdataset(BaseDataset):
         self.makedirs_ifnotexc()
 
 
-    def create_yaml_config(self, classes_config: list=[]):
+    def create_yaml_config(self, classes_config: list = None):
+        classes_config = classes_config or []
         if not classes_config:
             classes_config = self.get_all_classes_conf(True)
         yaml_content = {
@@ -117,7 +122,8 @@ class YOLOdataset(BaseDataset):
             yaml.dump(yaml_content, f, default_flow_style=False, allow_unicode=True)
 
 
-    def export_data(self, classes_config: list=[], images_size: str="320x240"):
+    def export_data(self, classes_config: list = None, images_size: str="320x240"):
+        classes_config = classes_config or []
         if not classes_config:
             classes_config = self.get_all_classes_conf(True)
         for i, clas in enumerate(classes_config):
@@ -145,7 +151,7 @@ class YOLOdataset(BaseDataset):
                         with open(label_path, "w") as f:
                             for label in image_data["annotation"]:
                                 obj_annotaion = ImageAnnotation.formate_bbox(tuple(label[1:]), old_img_size, new_img_size, "YOLO")
-                                f.write(f"{classes_ids[label[0]]} {obj_annotaion}")
+                                f.write(f"{classes_ids[label[0]]} {obj_annotaion}\n")
 
 
     def export(self) -> tuple[bool, str]:
@@ -176,7 +182,8 @@ class CSVdataset(BaseDataset):
         self.makedirs_ifnotexc()
 
 
-    def export_data(self, classes_config: list=[], images_size: str="320x240"):
+    def export_data(self, classes_config: list = None, images_size: str="320x240"):
+        classes_config = classes_config or []
         if not classes_config:
             classes_config = self.get_all_classes_conf(True)
         resize_size = tuple(map(int, images_size.split("x")))

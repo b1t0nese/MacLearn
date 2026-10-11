@@ -1,8 +1,11 @@
 import cv2
+import os
 from cv2.typing import MatLike
 import albumentations as AX
 import numpy as np
-import rembg
+from PIL import Image
+from sam3_studio_lib import AnnotationConfig, ClassConfig, Sam3Annotator
+from pcfuncs import get_appdata_dir
 
 
 
@@ -10,7 +13,7 @@ def open_image(file_path: str, color=cv2.COLOR_BGR2RGB) -> MatLike:
     with open(file_path, 'rb') as f:
         img_array = np.frombuffer(f.read(), dtype=np.uint8)
         image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-    return cv2.cvtColor(image, color)
+    return image if color is None else cv2.cvtColor(image, color)
 
 
 def resize_image(img: MatLike, target_size: tuple=(300, 300)) -> MatLike:
@@ -107,6 +110,7 @@ def generate_augmentations(image_path, bboxes_xywh, category_ids, n=5):
 
 
 class ImageAnnotation:
+    @staticmethod
     def formate_bbox(bbox: tuple[int], img_size: tuple[int]=None,
                      new_img_size: tuple[int]=None, ann_type: str=None) -> str:
         """Formate bbox for new image or other annotation type
@@ -206,60 +210,55 @@ class ImageAnnotation:
 
 
 class ImageAnnotationDetector:
-    def __init__(self, image: MatLike, max_objects: int=1, min_object_area: int=5000):
+    def __init__(self, image: MatLike, classes_conf: list[dict],
+                 configuration: dict = None, annotator: Sam3Annotator = None):
         self.image = image
-
-        self.contours = None
-        self.needed_contours = None
+        self.classes_conf = classes_conf
+        self.configuration = configuration or {}
+        self.class_ids = [
+            class_data.get("id", class_data.get("class_id"))
+            for class_data in classes_conf
+        ]
+        self.annotator = annotator or self._create_annotator()
+        self.detections = []
         self.annotations: list[ImageAnnotation] = []
 
-        self.max_objects = max_objects
-        self.min_object_area = min_object_area
-
-
-    def remove_bg(self):
-        self.image = rembg.remove(self.image)
-
-
-    def detect_contours(self):
-        self.blurred = cv2.GaussianBlur(self.image, (11, 11), 0)
-        self.gray = cv2.cvtColor(self.blurred, cv2.COLOR_BGR2GRAY)
-        self.edges = cv2.Canny(self.gray, 20, 80)
-        kernel = np.ones((7, 7), np.uint8)
-        closed = cv2.morphologyEx(self.edges, cv2.MORPH_CLOSE, kernel, iterations=2)
-        dilated = cv2.dilate(closed, kernel, iterations=3)
-        filled = cv2.morphologyEx(
-            dilated, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15)), iterations=2)
-        self.contours, _ = cv2.findContours(filled, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        self.needed_contours = self.contours
-
-
-    def smooth_contours(self):
-        mask = np.zeros_like(self.gray)
-        for contour in self.contours:
-            cv2.drawContours(mask, [contour], -1, 255, -1)
-        mask = cv2.GaussianBlur(mask, (21, 21), 0)
-        _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
-        self.contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        self.needed_contours = self.contours
-
-
-    def filter_contours_to_needed(self, max_contours: int=None, min_area: int=None):
-        max_contours = max_contours if max_contours else self.max_objects
-        min_area = min_area if min_area else self.min_object_area
-        contours = sorted(self.contours, key=cv2.contourArea, reverse=True)[:max_contours]
-        self.needed_contours = [c for c in contours if cv2.contourArea(c) > min_area]
+    def _create_annotator(self) -> Sam3Annotator:
+        classes = [
+            ClassConfig.from_values(
+                class_data["class_name"],
+                [item["search_query"] for item in class_data.get("subclasses", [])
+                 if item.get("search_query")],
+            )
+            for class_data in self.classes_conf
+            if class_data.get("subclasses")
+        ]
+        return Sam3Annotator(AnnotationConfig.for_classes(
+            classes,
+            self.configuration.get(
+                "sam3_weights_path",
+                os.path.join(get_appdata_dir("models"), "sam3.pt"),
+            ),
+            device=self.configuration.get("sam3_device", "cpu"),
+            confidence=self.configuration.get("sam3_confidence", 0.15),
+            min_box_area_px=self.configuration.get("sam3_min_box_area_px", 100.0),
+            one_detection_per_class=self.configuration.get("sam3_one_detection_per_class", False),
+        ))
 
 
     def calculate_bboxes_data(self) -> list[dict]:
-        if self.needed_contours:
-            self.annotations, annotations_data = [], []
-            for contour in self.needed_contours:
-                annotation = ImageAnnotation(contour, self.image.shape[:2][::-1])
-                data = annotation.get()
-                annotations_data.append(data)
-                self.annotations.append(annotation)
-            return annotations_data
+        self.annotations, annotations_data = [], []
+        self.detections = self.annotator.annotate(Image.fromarray(self.image))
+        for detection in self.detections:
+            x1, y1, x2, y2 = map(round, detection.box_xyxy)
+            contour = np.array([[[x1, y1]], [[x2, y1]], [[x2, y2]], [[x1, y2]]], dtype=np.int32)
+            annotation = ImageAnnotation(contour, self.image.shape[:2][::-1])
+            data = annotation.get()
+            data["class_id"] = self.class_ids[detection.class_id]
+            data["score"] = detection.score
+            annotations_data.append(data)
+            self.annotations.append(annotation)
+        return annotations_data
 
 
     def put_contours_on_image(self, array_image: MatLike, contours: tuple[int]=(),

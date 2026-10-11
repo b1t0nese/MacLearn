@@ -14,10 +14,10 @@ from autodataset_module.photoshop import open_image
 
 
 
-def get_image_type(image_bytes: bytes) -> str:
+def get_image_type(image_bytes: bytes) -> str | None:
     kind = filetype.guess(image_bytes)
     if not kind or not kind.mime.startswith('image/'):
-        return
+        return None
     return kind.extension
 
 
@@ -71,16 +71,13 @@ class Dataset:
             cur.execute("PRAGMA foreign_keys = ON;")
 
             cur.execute("""CREATE TABLE IF NOT EXISTS configuration (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            );""")
+                key TEXT PRIMARY KEY, value TEXT);""")
 
             cur.execute("""CREATE TABLE IF NOT EXISTS classes_conf (
                 id INTEGER PRIMARY KEY,
                 class_name TEXT NOT NULL UNIQUE,
                 enabled BOOLEAN DEFAULT TRUE,
-                subclasses TEXT DEFAULT "[]"
-            );""")
+                subclasses TEXT DEFAULT "[]");""")
 
             cur.execute("""CREATE TABLE IF NOT EXISTS dataset (
                 id INTEGER PRIMARY KEY,
@@ -94,8 +91,7 @@ class Dataset:
                     ON UPDATE CASCADE,
                 FOREIGN KEY (parent_image_id) REFERENCES dataset(id)
                     ON DELETE SET NULL
-                    ON UPDATE CASCADE
-            );""")
+                    ON UPDATE CASCADE);""")
 
             con.commit()
 
@@ -122,7 +118,8 @@ class Dataset:
 
 
     def add_or_upd_class_conf(self, class_name: str, class_id: int = None,
-                              enabled: bool = True, subclasses: list = []):
+                              enabled: bool = True, subclasses: list = None):
+        subclasses = subclasses or []
         with self.get_connection() as con:
             cur = con.cursor()
             result = cur.execute("SELECT id FROM classes_conf WHERE class_name = ?", (
@@ -149,13 +146,16 @@ class Dataset:
             con.commit()
             return True
 
-    def get_class_conf(self, class_id: int = None, class_name: str = None) -> dict:
+    def get_class_conf(self, class_id: int = None, class_name: str = None) -> dict | None:
         with self.get_connection() as con:
             if not class_id and not class_name:
                 return
             cur = con.cursor()
-            result = dict(cur.execute("SELECT * FROM classes_conf WHERE id = ? OR class_name = ?",
-                                      (class_id, class_name,)).fetchone())
+            row = cur.execute("SELECT * FROM classes_conf WHERE id = ? OR class_name = ?",
+                              (class_id, class_name,)).fetchone()
+            if not row:
+                return
+            result = dict(row)
             if result:
                 result["enabled"] = bool(result["enabled"])
                 result["subclasses"] = json.loads(result["subclasses"])
@@ -181,7 +181,8 @@ class Dataset:
 
 
     def save_image(self, image_bytes: bytes, class_id: int, image_type: str = "default",
-                   annotation: list = [], parent_image_id: int = None) -> int:
+                   annotation: list = None, parent_image_id: int = None) -> int | None:
+        annotation = annotation or []
         with self.get_connection() as con:
             img_exp = get_image_type(image_bytes)
             if img_exp:
@@ -207,25 +208,29 @@ class Dataset:
                 return False
             sql, params = "UPDATE dataset SET", []
             if class_id:
-                sql += " class_id=?,";
+                sql += " class_id=?,"
                 params.append(class_id)
-            if image_type:
-                sql += " type=?,";
+            if image_type is not None:
+                sql += " type=?,"
                 params.append(image_type)
-            if annotation:
+            if annotation is not None:
                 sql += " annotation=?,"
                 params.append(json.dumps(annotation, ensure_ascii=False))
             sql = sql.rstrip(",") + " WHERE id=?"
             cur.execute(sql, tuple(params + [image_id]))
+            con.commit()
             return dict(cur.execute("SELECT * FROM dataset WHERE id = ?", (image_id,)).fetchone())
 
     def del_image(self, image_id: int = None, filename: str = None) -> bool:
         with self.get_connection() as con:
             cur = con.cursor()
-            if not filename and image_id:
+            if image_id:
                 filename = cur.execute(
-                    "SELECT filename FROM dataset WHERE id = ?", (image_id,)).fetchone()[0]
-            else:
+                    "SELECT filename FROM dataset WHERE id = ?", (image_id,)).fetchone()
+                if not filename:
+                    return False
+                filename = filename[0]
+            elif not filename:
                 return False
             cur.execute("DELETE FROM dataset " + \
                         "WHERE id = ? OR filename = ?", (image_id, filename,))
@@ -236,7 +241,7 @@ class Dataset:
             except:
                 return False
 
-    def get_image(self, image_id: int = None, filename: str = None) -> dict | bool:
+    def get_image(self, image_id: int = None, filename: str = None) -> dict | None:
         with self.get_connection() as con:
             cur = con.cursor()
             result = cur.execute("SELECT * FROM dataset WHERE id = ? OR filename = ?",
@@ -325,7 +330,8 @@ class Project(Dataset):
                 pass
 
 
-    def save(self, configuration: dict, classes_conf: list = []):
+    def save(self, configuration: dict, classes_conf: list = None):
+        classes_conf = classes_conf or []
         for i, class_data in enumerate(classes_conf):
             for j, subclass_data in enumerate(class_data["subclasses"]):
                 if "/" in subclass_data["example_image"]:
@@ -344,6 +350,7 @@ class Project(Dataset):
         for class_data in classes_conf:
             self.add_or_upd_class_conf(**class_data)
         if self.is_zip_project and self.original_zip_path:
+            self.close_all_connections()
             self._pack_to_zip(self.original_zip_path)
 
     def save_as(self, to_path: str) -> tuple:
@@ -394,7 +401,7 @@ class Project(Dataset):
                         scan_all_paths(item, structure_node[item.name])
         scan_all_paths(base, self.project_paths)
 
-    def get_full_path(self, *path_parts: str) -> str:
+    def get_full_path(self, *path_parts: str) -> str | None:
         self.add_skipped_paths()
         current_level = self.project_paths
         full_path = Path(self._working_path)

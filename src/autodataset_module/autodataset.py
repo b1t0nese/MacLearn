@@ -1,17 +1,17 @@
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QCoreApplication
-from requests import get as get_request
+import queue
 from threading import Event, Thread
 from time import sleep
-import numpy as np
-import queue
-import cv2
 
-from project_module.project_manager import Project, SerialDataset
-from .browser import ChromeBrowser
-from .photoshop import *
-from .sources import AVAILABLE_SOURCES, DEFAULT_SOURCE, create_source
-from pcfuncs import *
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QCoreApplication
+from requests import get as get_request
+
 from logger import get_logger, LogContext
+from pcfuncs import *
+from project_module.project_manager import Project
+from autodataset_module.browser import ChromeBrowser
+from autodataset_module.photoshop import *
+from autodataset_module.sources import AVAILABLE_SOURCES, DEFAULT_SOURCE, create_source
+
 log = get_logger("autodataset")
 
 
@@ -68,6 +68,7 @@ class AutoDataset(QObject):
         self.downloaded_images_count = 0
         self.created_annotations_count = 0
         self.augmented_images_count = 0
+        self.all_images_count = 0
 
         self.do_download_images = True
         self.do_annotation = True
@@ -94,20 +95,9 @@ class AutoDataset(QObject):
 
 
     def detach_from_thread(self):
-        """Вернуть воркер в поток приложения перед завершением рабочего потока.
-
-        Qt позволяет менять поток объекта только из его собственного потока, поэтому метод
-        вызывается сигналом `finished` (эмитится внутри рабочего потока). Без этого
-        `App.delete_autodataset_thread()` не может вернуть воркер и он остаётся привязан
-        к уже завершённому QThread — следующий запуск не начнётся.
-        """
         app = QCoreApplication.instance()
         if app is not None and self.thread() != app.thread():
             self.moveToThread(app.thread())
-
-
-    def start_browser(self) -> bool:
-        return self.browser.start()
 
 
     def always_switch_to_main_window(self):
@@ -116,7 +106,7 @@ class AutoDataset(QObject):
             sleep(0.5)
 
 
-    def _get_example_image_path(self, subclass_data: dict) -> str:
+    def _get_example_image_path(self, subclass_data: dict) -> str | None:
         example_image = subclass_data.get("example_image")
         return self.project_manager.get_full_path("example_images", example_image) if example_image else None
 
@@ -216,6 +206,11 @@ class AutoDataset(QObject):
         for images_type in ["default", "validation"]:
             all_images += self.project_manager.get_images(type=images_type)
         self.all_images_count = len(all_images)
+        annotation_configuration = self.project_data["configuration"]
+        annotation_classes = [
+            class_data for class_data in self.project_data["classes"]
+            if class_data["enabled"] and class_data.get("subclasses")]
+        annotation_detector = None
         for i, image_data in enumerate(all_images):
             if not self._is_running:
                 break
@@ -223,16 +218,16 @@ class AutoDataset(QObject):
             image, new_img_data = open_image(image_path), None
             if not image_data["annotation"]:
                 if image is not None and image.size > 0:
-                    object_detector = ImageAnnotationDetector(image)
-                    object_detector.remove_bg()
-                    object_detector.detect_contours()
-                    object_detector.smooth_contours()
-                    object_detector.filter_contours_to_needed()
-                    annotation_data = object_detector.calculate_bboxes_data()
+                    if annotation_detector is None:
+                        annotation_detector = ImageAnnotationDetector(
+                            image, annotation_classes, annotation_configuration)
+                    else:
+                        annotation_detector.image = image
+                    annotation_data = annotation_detector.calculate_bboxes_data()
                     if annotation_data:
-                        bbox = list(map(lambda x: [image_data["class_id"]] + list(x["bbox"]), annotation_data))
-                        new_img_data = self.project_manager.change_image(image_data["id"], annotation=bbox)
-                    image = object_detector.put_contours_on_image(image)
+                        bboxes = [[item["class_id"]] + list(item["bbox"]) for item in annotation_data]
+                        new_img_data = self.project_manager.change_image(image_data["id"], annotation=bboxes)
+                    image = annotation_detector.put_contours_on_image(image)
             else:
                 image = visualize_bbox(image, image_data["annotation"])
             self.created_annotations_count += 1

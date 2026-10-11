@@ -9,7 +9,7 @@
 | [`autodataset.py`](#autodatasetpy) | `AutoDataset` — QObject-воркер с сигналами |
 | [`browser.py`](#browserpy) | `ChromeBrowser` — ленивый запуск Chrome, кэш драйвера и сессий |
 | [`sources/`](#sources) | Источники изображений: `base.py` (реестр), `yandex_images.py` (Яндекс.Картинки) |
-| [`photoshop.py`](#photoshoppy) | Обработка изображений: OpenCV, rembg, Albumentations |
+| [`photoshop.py`](#photoshoppy) | Обработка изображений: SAM3, OpenCV, Albumentations |
 
 ---
 
@@ -63,7 +63,7 @@
 | Фаза | Метод | Описание |
 |------|-------|----------|
 | **1/3** | `download_images_data()` | Скачивание через источник изображений (по умолчанию `YandexImagesSource`) |
-| **2/3** | `create_annotation_data()` | rembg + OpenCV контуры → bbox |
+| **2/3** | `create_annotation_data()` | SAM3 текстовые промпты → bbox |
 | **3/3** | `create_augmentation_data()` | Albumentations вариации |
 
 Перед фазой 1/3 воркер вызывает `start_browser()` — Chrome стартует **лениво**, поэтому запуск
@@ -253,25 +253,20 @@ class MySource(BaseImageSource):
 | Метод | Описание |
 |-------|----------|
 | `__init__(image, max_objects, min_object_area)` | Детектор (по умолчанию 1 объект, мин. 5000px) |
-| `remove_bg()` | Удаление фона через **rembg** |
-| `detect_contours()` | Canny → морфология → поиск контуров |
-| `smooth_contours()` | Сглаживание контуров |
-| `filter_contours_to_needed()` | Фильтр по площади и количеству |
-| `calculate_bboxes_data()` | Список аннотаций всех объектов |
+| `remove_bg()` | Запуск SAM3 по промптам классов |
+| `detect_contours()` | Совместимый пустой этап после SAM3 |
+| `smooth_contours()` | Совместимый пустой этап после SAM3 |
+| `filter_contours_to_needed()` | Совместимый пустой этап после SAM3 |
+| `calculate_bboxes_data()` | Преобразование результатов SAM3 в bbox |
 | `put_contours_on_image(...)` | Рисование на изображении |
 
 #### Алгоритм детекции
 
 ```
 Исходное изображение
-  → rembg.remove()         # удаление фона
-  → GaussianBlur(11,11)    # сглаживание
-  → Canny(20, 80)          # границы
-  → morphologyEx(CLOSE)    # закрыть дыры
-  → dilate(×3)             # усилить контуры
-  → findContours(EXTERNAL) # внешние контуры
-  → convexHull             # выпуклая оболочка
-  → boundingRect           # bounding box
+  → SAM3 текстовые промпты классов
+  → NMS и фильтрация площади
+  → bounding box
 ```
 
 ---
@@ -289,5 +284,5 @@ browser.py      ──►  undetected_chromedriver, webdriver_manager
               ──►  pcfuncs (get_appdata_dir), logger
 sources/*       ──►  .base (BaseImageSource, register_source)
               ──►  ../browser (ChromeBrowser), selenium, logger
-photoshop.py  ──►  cv2, albumentations, rembg, numpy
+photoshop.py  ──► cv2, albumentations, sam3_studio_lib, numpy
 ```

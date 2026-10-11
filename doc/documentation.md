@@ -57,7 +57,7 @@ build_windows(nuitka).bat
 
 Что делает скрипт:
 1. Создаёт чистое виртуальное окружение `build_env`
-2. Устанавливает все зависимости из `requirements.txt`
+2. Устанавливает все зависимости из `../src/requirements.txt`
 3. Компилирует `MacLearn.exe` через **Nuitka** (standalone mode)
 4. Запускает **UPX-сжатие** (`upx_build_compress.bat` — LZMA + best)
 

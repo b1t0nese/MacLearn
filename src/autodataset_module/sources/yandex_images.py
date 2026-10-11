@@ -110,7 +110,7 @@ class YandexImagesSource(BaseImageSource):
                     on_url(img_src)
 
 
-    def _get_image_url(self, img_element) -> str:
+    def _get_image_url(self, img_element) -> str | None:
         try:
             self.driver.execute_script("arguments[0].scrollIntoView();", img_element)
             self.driver.execute_script("arguments[0].click();", img_element)

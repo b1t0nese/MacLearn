@@ -1,18 +1,17 @@
-from platform import system as platf_system
-from PIL import Image, ImageGrab
-import numpy as np
-import subprocess
-import threading
 import hashlib
+import os
 import shutil
 import signal
-import tempfile
-import time
-import cv2
+import subprocess
 import sys
-import os
+import tempfile
+import threading
+import time
+from platform import system as platf_system
 
-
+import cv2
+import numpy as np
+from PIL import Image, ImageGrab
 
 _SYSTEM_NAMES = {"windows": "windows", "darwin": "macos", "linux": "linux"}
 SYSTEM = _SYSTEM_NAMES.get(platf_system().lower(), "unknown")
@@ -44,12 +43,6 @@ def is_executable_available(*names: str) -> bool:
 
 
 def sign_macos_binary(path: str) -> bool:
-    """Выдать бинарю в macOS ad-hoc подпись кода (иначе он будет убит).
-
-    macOS отправляет SIGKILL процессам с повреждённой подписью. Именно это
-    происходит с chromedriver: `undetected_chromedriver` патчит бинарь «на месте»
-    и ломает подпись Google, поэтому запуск падает с `Status code was: -9`.
-    """
     if not IS_MACOS or not os.path.isfile(path):
         return False
     try:
@@ -64,7 +57,6 @@ def sign_macos_binary(path: str) -> bool:
 
 
 def prepare_executable(path: str) -> bool:
-    """Подготовить скачанный бинарь к запуску: права на запуск и (в macOS) валидная подпись."""
     if not os.path.isfile(path):
         return False
     make_executable(path)
@@ -74,12 +66,6 @@ def prepare_executable(path: str) -> bool:
 
 
 def kill_processes_by_marker(marker: str, exclude_pid: int = None) -> int:
-    """Завершить процессы, в командной строке которых встречается `marker`.
-
-    Нужно, чтобы закрыть окно браузера, оставшееся после неудачного старта:
-    `undetected_chromedriver` запускает Chrome ещё до старта chromedriver.
-    Возвращает количество завершённых процессов.
-    """
     if not marker:
         return 0
     exclude_pid = exclude_pid or os.getpid()
@@ -137,12 +123,6 @@ def _log_notify_error(error: Exception):
 
 
 def notify(message: str, title: str = "MacLearn", app_name: str = "MacLearn") -> bool:
-    """Показать системное уведомление, никогда не ломая приложение.
-
-    В macOS используется нативный `osascript`: бэкенд `plyer` требует `pyobjus`, а без
-    него не только падает с `NotImplementedError`, но и печатает трейсбек в консоль.
-    Остальные системы уведомляются через `plyer`.
-    """
     if IS_MACOS and _notify_via_osascript(message, title):
         return True
     try:

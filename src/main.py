@@ -1,21 +1,18 @@
-from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
-from PyQt6.QtGui import QDesktopServices
-from PyQt6.QtCore import QThread, QUrl
-import qdarkstyle
 import argparse
-import shutil
-import tempfile
-import sys
-import os
 
-from project_module.project_manager import Project, get_dataset_statistics
-from project_module.dataset_manager import AVAILABLE_FORMATS
-from autodataset_module.photoshop import visualize_bbox, open_image
+import qdarkstyle
+from PyQt6.QtCore import QThread, QUrl
+from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
+
 from autodataset_module.autodataset import AutoDataset
-from interface_module.window import MainWindowUI, StatisticsWindow
+from autodataset_module.photoshop import visualize_bbox, open_image
 from interface_module.logs_window import LogsUI
-from pcfuncs import *
+from interface_module.window import MainWindowUI, StatisticsWindow
 from logger import get_logger, log_call, LogContext, SessionLogger, install_exception_hook
+from pcfuncs import *
+from project_module.dataset_manager import AVAILABLE_FORMATS
+from project_module.project_manager import Project, get_dataset_statistics
 
 log = get_logger("main")
 session = SessionLogger("main")
@@ -27,11 +24,11 @@ class App:
     @log_call()
     def __init__(self, **config):
         self.config = config
-        self.autodataset_worker: AutoDataset = None
-        self.autodataset_thread: QThread = None
-        self.appApplication: QApplication = None
-        self.windowUI: MainWindowUI = None
-        self.statistics_window: StatisticsWindow = None
+        self.autodataset_worker: AutoDataset | None = None
+        self.autodataset_thread: QThread | None = None
+        self.appApplication: QApplication | None = None
+        self.windowUI: MainWindowUI | None = None
+        self.statistics_window: StatisticsWindow | None = None
 
         config_info = {k: v for k, v in config.items() if v is not None}
         config_info.pop("project_path", None)
@@ -40,11 +37,11 @@ class App:
 
 
     @log_call()
-    def start(self, app: QApplication):
+    def start(self, qapp: QApplication):
         log.info("▶ Application starting...")
         exit_code = -1
         try:
-            self.appApplication = app
+            self.appApplication = qapp
             self.appApplication.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt6'))
             log.info("✓ QDarkStyle theme applied")
             exit_code = self.appApplication.exec()
@@ -88,10 +85,8 @@ class App:
         log.info("▶ Opening new window for project: %s", project_path)
 
         if self.autodataset_worker:
-            try:
-                self.delete_autodataset_thread()
-                self.autodataset_worker.close()
-            except: pass
+            self.delete_autodataset_thread()
+            self.autodataset_worker.close()
             self.autodataset_worker.deleteLater()
             self.autodataset_worker = None
 
@@ -172,9 +167,13 @@ class App:
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_images_to_class(c_id, it))
                     field.class_export_files.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.export_images_from_class(c_id, it))
-                    field.class_delete.clicked.disconnect(); field.class_delete.clicked.connect(
+                    field.class_delete.clicked.disconnect()
+                    field.class_delete.clicked.connect(
                         lambda e=None, c_id=clas["id"], fw=field, uc=True: self.class_delete_command(c_id, fw, uc))
-                    field.class_add_object.clicked.disconnect(); field.class_add_object.clicked.connect(
+                    field.class_delete_annotations.clicked.connect(
+                        lambda e=None, c_id=clas["id"], fw=field, uc=True: self.class_delete_annotations_command(c_id, fw, uc))
+                    field.class_add_object.clicked.disconnect()
+                    field.class_add_object.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_image_to_class(c_id, it))
 
                 for image in self.project_data.get_images(class_id=clas["id"], type=images_type):
@@ -184,7 +183,8 @@ class App:
                         image_data = visualize_bbox(open_image(image_data), image["annotation"])
                     if not object_widget:
                         object_widget = field.add_object(image["filename"], image_data, False, lambda e: None)
-                        object_widget.object_delete.clicked.disconnect(); object_widget.object_delete.clicked.connect(
+                        object_widget.object_delete.clicked.disconnect()
+                        object_widget.object_delete.clicked.connect(
                             lambda e, img_id=image["id"], tf=field, ow=object_widget: (
                                 self.project_data.del_image(img_id), tf.delete_object(ow), tf.update_layout()))
                         object_widget.image_data = image.copy()
@@ -196,7 +196,7 @@ class App:
                 field.show_class(clas["enabled"])
         self.windowUI.dataset_update_all_class_layouts()
 
-        classes_names = map(lambda x: x["class_name"], classes)
+        classes_names = {class_data["class_name"] for class_data in classes}
         for class_name, class_overview in self.windowUI.dataset_tab.classes_tabs.copy().items():
             if not class_name in classes_names:
                 for field in class_overview.fields:
@@ -204,7 +204,7 @@ class App:
                 self.windowUI.dataset_delete_class(class_overview, False)
 
 
-    def class_delete_command(self, class_id: int=None, field_widget=None, user_call: bool=True):
+    def class_delete_command(self, class_id: int | None=None, field_widget=None, user_call: bool=True):
         if not self.windowUI.dataset_delete_class_field_widget(field_widget, user_call):
             return
         log_window = LogsUI("main"); log_window.show()
@@ -224,7 +224,25 @@ class App:
             log_window.wait_while_not_exit()
             self.update_dataset_view_in_window()
 
-    def export_images_from_class(self, class_id: int, images_type: str="default", dist_path: str=None):
+    def class_delete_annotations_command(self, class_id: int | None=None, field_widget=None, user_call: bool=True):
+        log_window = LogsUI("main"); log_window.show()
+        log_window.log(f'Удаление аннотаций из класса id={class_id}, type={field_widget.class_name.text()}...\n')
+        QApplication.processEvents()
+        try:
+            all_images = self.project_data.get_images(class_id=class_id, type=field_widget.class_name.text())
+            for i, img in enumerate(all_images):
+                self.project_data.change_image(img["id"], annotation=[])
+                log_window.log(f'Удалена аннотация изображения {img["filename"]} {i+1}/{len(all_images)}.')
+                log_window.set_progress(int((i + 1) / len(all_images) * 100))
+                QApplication.processEvents()
+            log_window.log(f'Успех: аннотации удалены из класса id={class_id}, type={field_widget.class_name.text()}.', 1)
+        except Exception as e:
+            log_window.log(f'Ошибка: {e}', 1)
+        finally:
+            log_window.wait_while_not_exit()
+            self.update_dataset_view_in_window()
+
+    def export_images_from_class(self, class_id: int, images_type: str="default", dist_path: str | None=None):
         dist_path = QFileDialog.getExistingDirectory(
             None, "Выберите папку, куда будут скопированы изображения", "") if not dist_path else dist_path
         if not dist_path:
@@ -249,15 +267,18 @@ class App:
             log_window.wait_while_not_exit()
             QDesktopServices.openUrl(QUrl.fromLocalFile(dist_path))
 
-    def import_image_to_class(self, class_id: int, image_type: str="default", image_path: str=None):
-        image_path, file_types = QFileDialog.getOpenFileName(
-            None, "Выберите изображение, которое хотите добавить", "", "Images (*.png *.jpg)") if not image_path else image_path
+    def import_image_to_class(self, class_id: int, image_type: str="default", image_path: str | None=None):
+        if not image_path:
+            image_path, file_types = QFileDialog.getOpenFileName(
+                None, "Выберите изображение, которое хотите добавить", "", "Images (*.png *.jpg)")
+        else:
+            file_types = True
         if file_types and image_path:
             with open(image_path, "rb") as f:
                     self.project_data.save_image(f.read(), class_id, image_type)
             self.update_dataset_view_in_window()
 
-    def import_images_to_class(self, class_id: int, images_type: str = "default", images_path: str = None):
+    def import_images_to_class(self, class_id: int, images_type: str="default", images_path: str | None=None):
         images_path = QFileDialog.getExistingDirectory(
             None, "Выберите папку с изображениями, которые хотите импортировать", "") if not images_path else images_path
         if not images_path:
@@ -304,12 +325,13 @@ class App:
             return
         self.open_project(project_path)
 
-    def open_project_as_dir(self) -> bool:
+    def open_project_as_dir(self) -> bool | None:
         project_path = QFileDialog.getExistingDirectory(None, "Выберите папку проекта", "")
         if project_path:
             return self.open_project(project_path)
+        else: return None
 
-    def open_project(self, project_path: str=None) -> bool:
+    def open_project(self, project_path: str | None=None) -> bool:
         if not project_path:
             project_path, _ = QFileDialog.getOpenFileName(
                 self.windowUI, "Открыть проект", "", "MacLearn Project (*.maclproj)")
@@ -450,11 +472,6 @@ class App:
         self.windowUI.set_btn_start_autodataset_state(True)
 
     def autodataset_worker_disconnect_signals(self):
-        # Каждый сигнал отключаем отдельно: `disconnect()` без аргументов бросает
-        # TypeError, если сигнал ни к чему не подключён (например, `browser.ready`
-        # в headless-режиме). Общий try/except прерывал отключение остальных
-        # сигналов, и повторный `connect()` создавал дубли подключений — поэтому
-        # сообщения в логе автодатасета и строки таблиц выводились дважды.
         signals = (
             self.autodataset_worker.browser.ready,
             self.autodataset_worker.browser.chrome_widget_lock,

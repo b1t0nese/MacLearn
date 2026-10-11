@@ -73,7 +73,7 @@ QLabel:hover { border-color: palette(highlight); }
       <widget class="QLineEdit" name="object_name">
        <property name="styleSheet">
         <string notr="true">
-QLineEdit { font-weight: bold; font-size: 13px; }
+QLineEdit { font-weight: bold; padding: 0 4px; font-size: 13px; }
 QLineEdit:disabled { color: #b6b6b6; }
         </string>
        </property>
