@@ -554,9 +554,6 @@ class App:
         self.autodataset_worker.subclass_updated.connect(self.windowUI.autodataset_set_object_status)
 
     def delete_autodataset_thread(self):
-        # Отключаем по одному сигналу: одиночный `except: pass` на общем блоке
-        # прерывал отключение остальных сигналов, если какой-то из них ещё не был
-        # подключён, и обработчики прошлого запуска оставались висеть на воркере.
         if self.autodataset_thread:
             signals = (self.autodataset_thread.started, self.autodataset_worker.finished,
                        self.autodataset_thread.finished)
