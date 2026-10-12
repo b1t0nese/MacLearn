@@ -1,7 +1,9 @@
 __pycache__/
 .vscode/
+.idea/
 build_env/
 build/
 logs/
 todo.txt
 start.bat
+.DS_Store

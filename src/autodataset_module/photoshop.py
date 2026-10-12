@@ -52,6 +52,21 @@ def visualize_bbox(img: MatLike, bboxes: list[list[int]], classes_colors: list[t
 
 def generate_augmentations(image_path, bboxes_xywh, category_ids, n=5):
     image = cv2.imread(image_path)
+    if image is None:
+        return []
+    image_height, image_width = image.shape[:2]
+    valid_bboxes, valid_category_ids = [], []
+    for bbox, category_id in zip(bboxes_xywh, category_ids):
+        x, y, width, height = map(float, bbox)
+        x1 = max(0.0, min(x, image_width))
+        y1 = max(0.0, min(y, image_height))
+        x2 = max(0.0, min(x + width, image_width))
+        y2 = max(0.0, min(y + height, image_height))
+        if x2 > x1 and y2 > y1:
+            valid_bboxes.append([x1, y1, x2 - x1, y2 - y1])
+            valid_category_ids.append(category_id)
+    if not valid_bboxes:
+        return []
     results = []
     for i in range(n):
         h, w = image.shape[:2]
@@ -96,10 +111,10 @@ def generate_augmentations(image_path, bboxes_xywh, category_ids, n=5):
                 AX.MedianBlur(blur_limit=7, p=1.0),
             ], p=0.2),
         ], bbox_params=AX.BboxParams(
-            format='coco', label_fields=['category_ids'],
-            min_visibility=0.2, clip=True, min_area=50))
+            coord_format='coco', label_fields=['category_ids'],
+            min_visibility=0.2, clip_after_transform=True, min_area=50))
 
-        augmented = pipeline(image=image, bboxes=bboxes_xywh, category_ids=category_ids)
+        augmented = pipeline(image=image, bboxes=valid_bboxes, category_ids=valid_category_ids)
         results.append({
             "image": augmented['image'],
             "bboxes": augmented['bboxes'],
