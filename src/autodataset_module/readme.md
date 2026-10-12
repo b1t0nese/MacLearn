@@ -45,7 +45,7 @@
 | Метод | Описание |
 |-------|----------|
 | `__init__(project_manager, chromedriver_path, chrome_version, chrome_headless, chrome_session)` | Инициализация воркера и `ChromeBrowser` (Chrome при этом не запускается) |
-| `start_browser()` | Отложенный запуск Chrome (`self.browser.start()`) |
+| `browser.start()` | Отложенный запуск Chrome перед фазой сбора |
 | `close()` | Закрытие источника и браузера |
 | `detach_from_thread()` | Возврат воркера в поток приложения (вызывается сигналом `finished` из рабочего потока) |
 | `update_project_data()` | Загрузить конфигурацию проекта |
@@ -53,7 +53,7 @@
 | `run()` | Главный метод потока (3 фазы) |
 | `stop()` | Остановка по запросу пользователя |
 | `always_switch_to_main_window()` | Фоновый поток: переключение на главное окно Chrome |
-| `download_images(subclass_data, ...)` | Скачивание изображений для подкласса (источник → очередь → downloader) |
+| `download_images(subclass_data, ...)` | Последовательный сбор и сохранение изображений для подкласса |
 | `download_images_data()` | Проход по всем классам и подклассам |
 | `create_annotation_data()` | Автоматическое создание аннотаций |
 | `create_augmentation_data()` | Генерация аугментаций |
@@ -66,29 +66,29 @@
 | **2/3** | `create_annotation_data()` | SAM3 текстовые промпты → bbox |
 | **3/3** | `create_augmentation_data()` | Albumentations вариации |
 
-Перед фазой 1/3 воркер вызывает `start_browser()` — Chrome стартует **лениво**, поэтому запуск
+Перед фазой 1/3 воркер вызывает `browser.start()` — Chrome стартует **лениво**, поэтому запуск
 приложения не ждёт браузер. Если скачивание отключено или Chrome не запустился, фаза пропускается.
 
 #### Скачивание (`download_images`)
 
-Двухпоточная схема:
-- **Collector** — обращается к источнику (`self.source.collect(...)`), который отдаёт найденные URL в `on_url()`
-- **Downloader** — берёт URL из очереди, скачивает через `requests`, сохраняет
+Однопоточная схема:
+- Источник получает содержимое изображения из браузера и передаёт байты callback-функции
+- `Project` сразу сохраняет полученные байты без повторного HTTP-запроса
 
 ```
-источник (sources) ──► queue ──► downloader ──► project_manager.save_image()
+источник (sources) ──► image bytes ──► project_manager.save_image()
 ```
 
 Источник создаётся в `download_images_data()` из реестра `AVAILABLE_SOURCES`; имя источника
 берётся из `configuration["image_source"]` (по умолчанию `DEFAULT_SOURCE`).
-`collector()` обёрнут в `try/finally`, поэтому очередь всегда закрывается (`None`) даже при ошибке сбора.
+Источник прекращает сбор через `stop_check()`, когда необходимое количество изображений сохранено.
 
 #### Остановка
 
 `stop()` выставляет `_is_running = False` и флаг-событие сессии (`_stop_event`), а `stop_check()`
 возвращает `True`, если событие выставлено **или** воркер уже не запущен. Событие создаётся заново
-только при следующем `download_images()`, поэтому «залипший» коллектор (не успевший выйти за
-`collector_thread.join(timeout=5)`) завершается сам и не продолжает сбор после остановки.
+при следующем `download_images()`, поэтому источник прекращает сбор и не сохраняет новые изображения
+после остановки.
 
 ---
 
@@ -165,12 +165,12 @@
 
 | Компонент | Описание |
 |-----------|----------|
-| `BaseImageSource` | Базовый класс: `__init__(browser, clipboard_manager)`, `collect(...)`, `stop()` |
-| `collect(subclass_data, on_url, stop_check, status, example_image_path)` | Собрать ссылки на изображения |
+| `BaseImageSource` | Базовый класс: `__init__(browser)`, `collect(...)`, `stop()` |
+| `collect(subclass_data, on_image, stop_check, status, example_image_path)` | Получить и передать байты изображений |
 | `AVAILABLE_SOURCES` | Реестр источников (`dict[str, type]`) |
 | `DEFAULT_SOURCE` | Источник по умолчанию (`"Yandex"`) |
 | `register_source(name)` | Декоратор регистрации класса источника |
-| `create_source(name, browser, clipboard_manager)` | Создать источник по имени |
+| `create_source(name, browser)` | Создать источник по имени |
 
 ### `sources/yandex_images.py`
 
@@ -178,15 +178,15 @@
 
 | Метод | Описание |
 |-------|----------|
-| `collect(...)` | Поиск + прокрутка + сбор URL (блокировка окна на время работы) |
-| `_open_search_page(query, example_image_path, stop_check)` | Поиск по фото-примеру (буфер обмена + «Похожие») |
-| `_scroll_and_collect(on_url, stop_check)` | Прокрутка страницы и «Показать ещё» |
-| `_get_image_url(img_element)` | Открыть изображение и получить `src` |
+| `collect(...)` | Поиск + прокрутка + получение байтов (блокировка окна на время работы) |
+| `_open_search_page(example_image_path, stop_check)` | Поиск по фото-примеру и переход на «Похожие» |
+| `_scroll_and_collect(on_image, stop_check)` | Прокрутка страницы и «Показать ещё» |
+| `_get_image_data(img_element)` | Открыть изображение и получить `src` и байты |
 
 #### Селекторы и таймауты
 
 Все CSS/XPath-селекторы вынесены в атрибуты класса (`CSS_SEARCH_IMAGE`, `CSS_OPENED_IMAGE`,
-`CSS_CLOSE_VIEWER`, `CSS_CBIR_INTENT`, `XPATH_SHOW_MORE`, `XPATH_SIMILAR`) — при изменении вёрстки
+`CSS_CLOSE_VIEWER`, `XPATH_SHOW_MORE`) — при изменении вёрстки
 Яндекс.Картинок править нужно только их. Таймауты: `ELEMENT_TIMEOUT`, `SCROLL_TIMEOUT`, `SIMILAR_TIMEOUT`.
 
 #### Пример нового источника
@@ -196,7 +196,7 @@
 class MySource(BaseImageSource):
     name = "MySource"
 
-    def collect(self, subclass_data, on_url, stop_check, status=None, example_image_path=None):
+    def collect(self, subclass_data, on_image, stop_check, status=None, example_image_path=None):
         self.browser.lock(True)
         try:
             ...
@@ -278,7 +278,7 @@ autodataset.py  ──►  project_module.project_manager (Project, SerialDatase
               ──►  .browser (ChromeBrowser)
               ──►  .sources (AVAILABLE_SOURCES, DEFAULT_SOURCE, create_source)
               ──►  .photoshop (все функции)
-              ──►  pcfuncs (ClipboardManager)
+              ──►  pcfuncs
               ──►  logger (get_logger, LogContext)
 browser.py      ──►  undetected_chromedriver, webdriver_manager
               ──►  pcfuncs (get_appdata_dir), logger

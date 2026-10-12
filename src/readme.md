@@ -42,7 +42,7 @@
 
 `main.py` — оркестратор: связывает UI, проекта и автодатасет.
 `logger.py` — центральная система логирования, используется всеми модулями.
-`pcfuncs.py` — низкоуровневые утилиты (буфер обмена, процессы).
+`pcfuncs.py` — низкоуровневые кроссплатформенные утилиты, работа с процессами и путями приложения.
 
 ---
 
@@ -69,7 +69,7 @@ maclearn/
     │   ├── project_manager.py          # Dataset, Project, статистика
     │   ├── dataset_manager.py          # Экспорт (YOLO, CSV)
     │   └── __init__.py
-    └── interface_module/
+    ├── interface_module/
         ├── window.py                   # MainWindowUI, виджеты
         ├── logs_window.py              # Окно логов
         ├── embedded_program_qt.py      # Встраивание Chrome
@@ -87,6 +87,7 @@ maclearn/
                 ├── object_card.ui
                 ├── overview_class.ui
                 └── information.ui
+    └── sam3_studio_lib/                 # SAM3-аннотация и экспорт
 ```
 
 ---
@@ -111,7 +112,7 @@ maclearn/
 | `interface_module.window` | `MainWindowUI`, `StatisticsWindow` |
 | `interface_module.logs_window` | `LogsUI` |
 | `autodataset_module.photoshop` | `visualize_bbox`, `open_image` |
-| `pcfuncs` | Утилиты (clipboard, launch_new_instance) |
+| `pcfuncs` | Кроссплатформенные утилиты и запуск новых экземпляров |
 | `logger` | `get_logger`, `log_call`, `LogContext`, `SessionLogger`, `install_exception_hook` |
 
 ### Глобальная инициализация
@@ -176,10 +177,10 @@ install_exception_hook(log)         # Глобальный перехват ис
 
 | Аргумент | Тип | Описание |
 |----------|-----|----------|
-| `project_path` | str (опц.) | Путь к проекту |
+| `--project-path PATH` | str (опц.) | Путь к существующему проекту; без аргумента запускается создание нового |
 | `--chrome-version VERSION` | int | Версия Chrome |
 | `--chromedriver-path PATH` | str | Путь к chromedriver |
-| `-chrome-headless` | flag | Chrome без окна |
+| `--chrome-no-headless` | flag | Показать окно Chrome; по умолчанию headless |
 
 ---
 
@@ -238,7 +239,7 @@ install_exception_hook(log)         # Глобальный перехват ис
 ## `src/pcfuncs.py`
 
 **Роль:** низкоуровневые утилиты платформы. Модуль **определяет ОС при импорте** и автоматически
-выбирает подходящие реализации функций (буфер обмена, менеджер окон, запуск процессов), поэтому
+выбирает подходящие реализации функций (менеджер окон и запуск процессов), поэтому
 остальной код не содержит проверок платформы.
 
 ### Определение ОС (при импорте)
@@ -262,8 +263,6 @@ install_exception_hook(log)         # Глобальный перехват ис
 | `is_executable_available(*names)` | Есть ли программа в PATH |
 | `get_appdata_root(local)` / `get_appdata_dir(*subdirs, local, create)` | Папка данных приложения |
 | `launch_new_instance()` | Запуск нового независимого экземпляра приложения |
-| `pil_image_to_array(image)` | `PIL.Image` → BGR `np.ndarray` |
-| `save_temp_image(image)` / `remove_temp_file(path)` | Временный файл изображения (для внешних утилит) |
 
 **Папка данных приложения** (`get_appdata_dir`):
 
@@ -272,34 +271,6 @@ install_exception_hook(log)         # Глобальный перехват ис
 | Windows | `%APPDATA%\maclearn\...` (`%LOCALAPPDATA%` при `local=True`) |
 | macOS | `~/Library/Application Support/maclearn/...` (`~/Library/Caches` при `local=True`) |
 | Linux | `$XDG_CONFIG_HOME/maclearn/...` или `~/.config/maclearn/...` (`$XDG_CACHE_HOME` / `~/.cache` при `local=True`) |
-
-### Буфер обмена
-
-Бэкенды выбираются при импорте модуля: `CLIPBOARD_BACKENDS` → `CLIPBOARD_BACKEND`.
-
-| Бэкенд | ОС | Реализация |
-|--------|----|------------|
-| `WindowsClipboard` | Windows | `win32clipboard` (DIB) + PIL для чтения |
-| `MacOSClipboard` | macOS | `osascript`/`pbcopy` + PIL для чтения |
-| `LinuxClipboard` | Linux | `wl-copy`/`wl-paste` (Wayland) или `xclip` (X11) |
-| `BaseClipboard` | прочие | заглушка (`available = False`) |
-
-### Класс `ClipboardManager`
-
-Фасад над бэкендом: `available`, `copy_image_to_clipboard(image)` (str путь или `np.ndarray`),
-`copy_text_to_clipboard(text)`, `get_image_from_clipboard()` (BGR `np.ndarray` или `None`).
-
-### Класс `ClipboardImageWatcher`
-
-Мониторинг буфера обмена на новые изображения (через `ClipboardManager`).
-
-| Метод | Описание |
-|-------|----------|
-| `__init__(callback, check_interval, clipboard_manager)` | Колбэк при новом изображении |
-| `get_image_hash(image)` | MD5 миниатюры для сравнения |
-| `check_clipboard()` | Одиночная проверка буфера |
-| `start()` | Запуск фонового потока мониторинга |
-| `stop()` | Остановка потока |
 
 ### Менеджер окон (встраивание чужих окон)
 
@@ -343,7 +314,7 @@ install_exception_hook(log)         # Глобальный перехват ис
 | `autodataset.py` | `AutoDataset` — QObject-воркер с сигналами |
 | `browser.py` | `ChromeBrowser` — ленивый запуск Chrome, кэш драйвера и сессий |
 | `sources/` | `BaseImageSource` + `AVAILABLE_SOURCES` (реестр), `YandexImagesSource` |
-| `photoshop.py` | OpenCV-обработка, rembg, аугментации |
+| `photoshop.py` | SAM3-аннотация, OpenCV-обработка, аугментации |
 
 ## ▶ [interface_module](https://github.com/b1t0nese/MacLearn/blob/main/src/interface_module/readme.md)
 
@@ -389,8 +360,8 @@ start_autodataset()
        ├─ ChromeBrowser.start()               # отложенный запуск + кэш chromedriver
        │    └─ ready(pid) → UI встраивает окно браузера
        ├─ Phase 1: download_images_data()     # источник изображений (sources)
-       │    └─ download_images(subclass)      # source.collect + downloader (2 потока)
-       ├─ Phase 2: create_annotation_data()   # rembg + OpenCV контуры
+       │    └─ download_images(subclass)      # source.collect + save_image (1 поток)
+       ├─ Phase 2: create_annotation_data()   # SAM3 bounding boxes
        ├─ Phase 3: create_augmentation_data() # Albumentations
   └─ finished → on_autodataset_finished()
 ```
@@ -414,13 +385,13 @@ start_autodataset()
       ▼                                            ▼
 ┌─────────────────────┐                ┌──────────────────────┐
 │    logger.py        │◄───────────────│      pcfuncs.py      │
-│ (общий для всех)    │                │  (буфер/процессы)    │
+│ (общий для всех)    │                │  (процессы/пути)     │
 └─────────────────────┘                └──────────────────────┘
 ```
 
 - **main.py** — оркестратор, не имеет своей бизнес-логики, только связывает.
 - **project_module** — не зависит от UI, чистая работа с данными.
-- **autodataset_module** — зависит от project_module (Project) и pcfuncs (clipboard).
+- **autodataset_module** — зависит от project_module (Project), pcfuncs и Selenium.
 - **interface_module** — зависит от logger (handler для окна логов), автодатасета (сигналы).
 - **logger.py** — независимый, используется всеми.
 - **pcfuncs.py** — независимый, низкоуровневые утилиты.

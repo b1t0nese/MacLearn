@@ -1,5 +1,5 @@
 import argparse
-
+import tempfile
 import qdarkstyle
 from PyQt6.QtCore import QThread, QUrl
 from PyQt6.QtGui import QDesktopServices
@@ -29,11 +29,16 @@ class App:
         self.appApplication: QApplication | None = None
         self.windowUI: MainWindowUI | None = None
         self.statistics_window: StatisticsWindow | None = None
+        self.new_project_temp_dir = None
+        self.close_requested = False
 
         config_info = {k: v for k, v in config.items() if v is not None}
         config_info.pop("project_path", None)
         session.start(extra={"project_path": config["project_path"], **config_info})
-        self.open_project(self.config["project_path"])
+        if self.config["project_path"]:
+            self.open_project(self.config["project_path"])
+        else:
+            self.new_project()
 
 
     @log_call()
@@ -56,6 +61,24 @@ class App:
 
     @log_call()
     def close_application(self, event=None, exit_code: int=0):
+        if event and not self.close_requested and self._project_needs_save():
+            reply = QMessageBox.question(
+                self.windowUI, "Сохранить изменения?", "Сохранить изменения?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No |
+                QMessageBox.StandardButton.Cancel)
+            if reply == QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+            if reply == QMessageBox.StandardButton.Yes:
+                if self.new_project_temp_dir is not None:
+                    if not self._save_project_as_on_close():
+                        event.ignore()
+                        return
+                else:
+                    self.save_project()
+        if event:
+            event.accept()
+        self.close_requested = True
         log.info("✕ Closing application (exit_code=%d)", exit_code)
         session.end(exit_code)
 
@@ -63,7 +86,7 @@ class App:
             log.debug("Closing autodataset worker...")
             self.delete_autodataset_thread()
             self.autodataset_worker.close()
-        if self.windowUI:
+        if self.windowUI and not event:
             log.debug("Closing main window...")
             self.windowUI.close()
         if self.statistics_window:
@@ -72,11 +95,6 @@ class App:
         if self.appApplication:
             log.debug("Quitting Qt application...")
             self.appApplication.quit()
-        if event:
-            if hasattr(self.windowUI, 'original_close_event'):
-                self.windowUI.original_close_event(event)
-            else:
-                event.accept()
         log.info("✓ Application closed (exit_code=%d)", exit_code)
         sys.exit(exit_code)
 
@@ -102,6 +120,7 @@ class App:
 
         with LogContext("UI initialization", log):
             self.windowUI.initUI()
+            self.windowUI.closeEvent = self.close_application
             self.init_config_window()
             self.init_project_conf_in_window()
             self.update_dataset_view_in_window()
@@ -145,12 +164,12 @@ class App:
                     if subclas["example_image"] else None
                 cur_class_widget.add_object(subclas["search_query"], img_fullpath)
         pr_tab = self.windowUI.project_tab
-        pr_tab.cb_validation_data.setChecked(project_conf["configuration"]["validation_data"])
-        pr_tab.spin_aug_count.setValue(project_conf["configuration"]["augmentation_count"])
-        pr_tab.cb_annotation.setChecked(project_conf["configuration"]["annotation"])
-        pr_tab.combo_dataset_format.setCurrentText(project_conf["configuration"]["dataset_format"])
-        pr_tab.spin_images_per_class.setValue(project_conf["configuration"]["images_per_class"])
-        pr_tab.combo_images_size.setCurrentText(project_conf["configuration"]["images_size"])
+        pr_tab.cb_validation_data.setChecked(project_conf["configuration"].setdefault("validation_data", False))
+        pr_tab.spin_aug_count.setValue(project_conf["configuration"].setdefault("augmentation_count", 0))
+        pr_tab.cb_annotation.setChecked(project_conf["configuration"].setdefault("annotation", False))
+        pr_tab.combo_dataset_format.setCurrentText(project_conf["configuration"].setdefault("dataset_format", "YOLO"))
+        pr_tab.spin_images_per_class.setValue(project_conf["configuration"].setdefault("images_per_class", 100))
+        pr_tab.combo_images_size.setCurrentText(project_conf["configuration"].setdefault("images_size", "640x480"))
 
     def update_dataset_view_in_window(self):
         classes = self.project_data.get_all_classes_conf()
@@ -310,20 +329,83 @@ class App:
 
 
     def new_project(self):
+        if self.new_project_temp_dir is not None:
+            self.new_project_temp_dir.cleanup()
+        self.new_project_temp_dir = tempfile.TemporaryDirectory(prefix="maclearn_new_")
+        if self.windowUI is None:
+            self.windowUI = MainWindowUI()
+        self.new_window(self.new_project_temp_dir.name)
+
+    def _project_needs_save(self) -> bool:
+        if self.new_project_temp_dir is not None:
+            return True
+        if not self.windowUI or not getattr(self, "project_data", None):
+            return False
+        current = self._get_project_configuration()
+        saved = self.project_data.get_project_conf()
+        return (
+            current["configuration"] != saved["configuration"] or
+            self._normalize_classes(current["classes_conf"]) !=
+            self._normalize_classes(saved["classes"])
+        )
+
+    @staticmethod
+    def _normalize_classes(classes: list) -> list:
+        normalized = []
+        for class_data in classes:
+            normalized.append({
+                "class_id": class_data.get("class_id", class_data.get("id")),
+                "class_name": class_data["class_name"],
+                "enabled": class_data["enabled"],
+                "subclasses": [{
+                    "search_query": subclass["search_query"],
+                    "example_image": os.path.basename(subclass["example_image"])
+                    if subclass.get("example_image") else None
+                } for subclass in class_data["subclasses"]]
+            })
+        return normalized
+
+    def _save_project_as_on_close(self) -> bool:
         project_path, ok = QFileDialog.getSaveFileName(
-            self.windowUI, "Новый проект", "Новый проект.maclproj", "MacLearn Project (*.maclproj)")
+            self.windowUI, "Сохранить проект как", "Новый проект.maclproj",
+            "MacLearn Project (*.maclproj)")
         if not ok or not project_path:
-            return
-        if not project_path.endswith('.maclproj'):
-            project_path += '.maclproj'
-        with tempfile.TemporaryDirectory(prefix="maclearn_new_") as temp_dir:
-            empty_project = Project(temp_dir)
-            status, message = empty_project.save_as(project_path)
-            empty_project.close_all_connections()
+            return False
+        if not project_path.endswith(".maclproj"):
+            project_path += ".maclproj"
+        status, message = self.project_data.save_as(project_path)
         if not status:
             QMessageBox.warning(self.windowUI, "Ошибка", message)
-            return
-        self.open_project(project_path)
+            return False
+        self.new_project_temp_dir.cleanup()
+        self.new_project_temp_dir = None
+        return True
+
+    def _get_project_configuration(self) -> dict:
+        pr_tab = self.windowUI.project_tab
+        classes_conf = []
+        for class_obj in pr_tab.project_overview.fields:
+            subclasses = [{
+                "search_query": object.object_name.text(),
+                "example_image": object.object_image.my_image_path
+            } for object in class_obj.objects]
+            classes_conf.append({
+                "class_id": class_obj.class_data["id"] if hasattr(class_obj, "class_data") else None,
+                "class_name": class_obj.class_name.text(),
+                "enabled": class_obj.class_checkbox.isChecked(),
+                "subclasses": subclasses
+            })
+        return {
+            "configuration": {
+                "validation_data": pr_tab.cb_validation_data.isChecked(),
+                "augmentation_count": pr_tab.spin_aug_count.value(),
+                "annotation": pr_tab.cb_annotation.isChecked(),
+                "dataset_format": pr_tab.combo_dataset_format.currentText(),
+                "images_per_class": pr_tab.spin_images_per_class.value(),
+                "images_size": pr_tab.combo_images_size.currentText()
+            },
+            "classes_conf": classes_conf
+        }
 
     def open_project_as_dir(self) -> bool | None:
         project_path = QFileDialog.getExistingDirectory(None, "Выберите папку проекта", "")
@@ -344,16 +426,16 @@ class App:
                     f'Проект по заданному пути "{project_path}" не найден, или повреждён. '+\
                         'Будут созданы недостающие папки и файлы.',
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                if reply == QMessageBox.StandardButton.Close:
-                    self.close_application()
-                    return False
-                elif reply == QMessageBox.StandardButton.No:
+                if reply == QMessageBox.StandardButton.No:
                     self.windowUI.deleteLater()
                     self.windowUI = previous_window
-                    self.open_project()
                     return False
+            if self.new_project_temp_dir is not None:
+                self.new_project_temp_dir.cleanup()
+                self.new_project_temp_dir = None
             self.new_window(project_path)
             if previous_window:
+                previous_window.closeEvent = lambda event: event.accept()
                 previous_window.close()
                 previous_window.deleteLater()
             return True
@@ -363,32 +445,7 @@ class App:
             return False
 
     def save_project(self):
-        pr_tab = self.windowUI.project_tab
-        local_project_conf = {
-            "configuration": {
-                "validation_data": pr_tab.cb_validation_data.isChecked(),
-                "augmentation_count": pr_tab.spin_aug_count.value(),
-                "annotation": pr_tab.cb_annotation.isChecked(),
-                "dataset_format": pr_tab.combo_dataset_format.currentText(),
-                "images_per_class": pr_tab.spin_images_per_class.value(),
-                "images_size": pr_tab.combo_images_size.currentText()
-            },
-            "classes_conf": []
-        }
-        for class_obj in self.windowUI.project_tab.project_overview.fields:
-            local_class = {
-                "class_id": class_obj.class_data["id"] if hasattr(class_obj, "class_data") else None,
-                "class_name": class_obj.class_name.text(),
-                "enabled": class_obj.class_checkbox.isChecked(),
-                "subclasses": []
-            }
-            for object in class_obj.objects:
-                local_class["subclasses"].append({
-                    "search_query": object.object_name.text(),
-                    "example_image": object.object_image.my_image_path
-                })
-            local_project_conf["classes_conf"].append(local_class)
-        self.project_data.save(**local_project_conf)
+        self.project_data.save(**self._get_project_configuration())
         self.windowUI.autodataset_update_statuses()
 
     def save_project_as(self):
@@ -445,7 +502,7 @@ class App:
 
 
     def toggle_autodataset_work(self):
-        if self.autodataset_thread and self.autodataset_thread.isRunning():
+        if self.autodataset_worker and self.autodataset_worker._is_running:
             self.stop_autodataset()
         else:
             self.start_autodataset()
@@ -521,7 +578,7 @@ class App:
                app_name='MacLearn', title='MacLearn автодатасет')
 
     def stop_autodataset(self):
-        if self.autodataset_worker:
+        if self.autodataset_worker and self.autodataset_worker._is_running:
             self.autodataset_worker.stop()
 
 
@@ -533,12 +590,12 @@ def main():
         "MacLearn", description="A program that will automatically assemble a "+
         "high-quality dataset of thousands of images for you in a matter of minutes.")
     arg_parser.add_argument("--project-path", nargs='?', default=None,
-                            help="path of your MacLearn project (skip this to choose project from explorer)")
+                            help="path of your MacLearn project (skip this to create a new project)")
     arg_parser.add_argument("--chrome-version", type=int, default=None,
                             help="version of Chrome installed on your computer (you can skip this, if the program is working fine)")
     arg_parser.add_argument("--chromedriver-path", type=str, default=None,
                             help="path to your chromedriver (you can skip this, if the program is working fine)")
-    arg_parser.add_argument("-chrome-no-headless", action='store_true', default=False,
+    arg_parser.add_argument("--chrome-no-headless", action='store_true', default=False,
                             help="if you want to see the browser, enable this feature")
     arguments = arg_parser.parse_args()
 

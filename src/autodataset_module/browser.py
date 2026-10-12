@@ -40,6 +40,7 @@ class ChromeBrowser(QObject):
         self.chrome_pid = None
         self.locked = False
         self.used_cached_driver = False
+        self.last_error = None
         log.info("✓ ChromeBrowser created (headless=%s, version=%s, session=%s)",
                  chrome_headless, chrome_version, self.session_name)
 
@@ -51,6 +52,7 @@ class ChromeBrowser(QObject):
     def start(self) -> bool:
         if self.is_ready():
             return True
+        self.last_error = None
         self.kill_session_processes()
         log.info("▶ Starting Chrome (session dir: %s)", self.session_dir)
         session_dir = self.session_dir
@@ -67,6 +69,7 @@ class ChromeBrowser(QObject):
             if session_dir != self.session_dir:
                 self.kill_session_processes(session_dir)
             log.error("✗ Chrome start failed: %s", error)
+            self.last_error = str(error)
             self.failed.emit(str(error))
             return False
         log.info("✓ Chrome started (PID=%s)", self.chrome_pid)

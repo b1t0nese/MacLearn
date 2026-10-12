@@ -1,10 +1,7 @@
-import queue
 from threading import Event, Thread
 from time import sleep
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QCoreApplication
-from requests import get as get_request
-
 from logger import get_logger, LogContext
 from pcfuncs import *
 from project_module.project_manager import Project
@@ -59,7 +56,6 @@ class AutoDataset(QObject):
 
         self.browser = ChromeBrowser(chromedriver_path, chrome_version,
                                      not chrome_no_headless, chrome_session, parent=self)
-        self.clipboard_manager = self._create_clipboard_manager()
         self.source = None
 
         self.project_manager = project_manager
@@ -75,13 +71,6 @@ class AutoDataset(QObject):
         self.do_augmentation = True
 
         log.info("✓ AutoDataset initialized (%d classes)", len(self.project_data.get("classes", [])))
-
-
-    def _create_clipboard_manager(self):
-        try:
-            return ClipboardManager()
-        except Exception as e:
-            log.warning("⚠ Clipboard manager is not available: %s", e)
 
 
     def close(self):
@@ -117,66 +106,50 @@ class AutoDataset(QObject):
             self.update_information("Validation data enabled", 0)
 
         self._stop_event = Event()
-        self._image_queue = queue.Queue()
-
         def stop_check() -> bool:
             return self._stop_event.is_set() or not self._is_running
 
-        def collector():
-            try:
-                self.source.collect(
-                    subclass_data, self._image_queue.put, stop_check,
-                    self.update_information, self._get_example_image_path(subclass_data))
-            except Exception as e:
-                self.update_information(f"Collect error: {e}", 2)
-            finally:
-                self._image_queue.put(None)
-
-        def downloader():
+        def on_image(image_bytes: bytes):
             nonlocal downloaded, num_images, num_val_images
-            downloaded_images_count = downloaded
-            while not stop_check():
-                try:
-                    url = self._image_queue.get(timeout=1)
-                except queue.Empty:
-                    continue
-                if num_images > 0: img_type = "default"
-                elif num_val_images > 0: img_type = "validation"
-                else: break
-                try:
-                    response = get_request(url, timeout=5)
-                    if response.status_code == 200:
-                        image_id = self.project_manager.save_image(response.content, class_id, img_type)
-                        if img_type == "validation": num_val_images -= 1
-                        else: num_images -= 1
-                        downloaded_images_count += 1
-                        self.downloaded_images_count += 1
-                        image_data = self.project_manager.get_image(image_id)
-                        self.update_information(
-                            f"Downloaded {downloaded_images_count}/{to_download}. id={image_data['id']} class={image_data['class_id']} file={image_data['filename']}", 0,
-                            subclass_updated=(subclass_data["search_query"], downloaded_images_count, "", 0),
-                            stage_updated=("Download images", (self.downloaded_images_count, self.all_images_count)),
-                            cur_image=(self.project_manager.get_full_path("images", image_data["filename"]), np.array([])))
-                except Exception as e:
-                    self.update_information(f"Download error: {e}. src: {url}", 2)
-                if num_images <= 0 and num_val_images <= 0:
-                    self._stop_event.set()
+            if stop_check():
+                return
+            if num_images > 0:
+                img_type = "default"
+            elif num_val_images > 0:
+                img_type = "validation"
+            else:
+                self._stop_event.set()
+                return
+            try:
+                image_id = self.project_manager.save_image(image_bytes, class_id, img_type)
+                if img_type == "validation":
+                    num_val_images -= 1
+                else:
+                    num_images -= 1
+                downloaded += 1
+                self.downloaded_images_count += 1
+                image_data = self.project_manager.get_image(image_id)
+                self.update_information(
+                    f"Downloaded {downloaded}/{to_download}. id={image_data['id']} class={image_data['class_id']} file={image_data['filename']}", 0,
+                    subclass_updated=(subclass_data["search_query"], downloaded, "", 0),
+                    stage_updated=("Download images", (self.downloaded_images_count, self.all_images_count)),
+                    cur_image=(self.project_manager.get_full_path("images", image_data["filename"]), np.array([])))
+            except Exception as e:
+                self.update_information(f"Download error: {e}", 2)
+            if num_images <= 0 and num_val_images <= 0:
+                self._stop_event.set()
 
-        collector_thread = Thread(target=collector, daemon=True)
-        collector_thread.start()
-        downloader_thread = Thread(target=downloader, daemon=True)
-        downloader_thread.start()
-
-        downloader_thread.join()
-        self._stop_event.set()
-        collector_thread.join(timeout=5)
-        if collector_thread.is_alive():
-            log.warning("⚠ Collector thread still running (waiting for the Selenium call to finish)")
+        try:
+            self.source.collect(
+                subclass_data, on_image, stop_check,
+                self.update_information, self._get_example_image_path(subclass_data))
+        except Exception as e:
+            self.update_information(f"Collect error: {e}", 2)
 
 
     def download_images_data(self):
         source_name = self.project_data["configuration"].get("image_source", DEFAULT_SOURCE)
-        self.source = create_source(source_name, self.browser, self.clipboard_manager)
+        self.source = create_source(source_name, self.browser)
         if not self.source:
             self.update_information(
                 f"Unknown image source \"{source_name}\". Available: {list(AVAILABLE_SOURCES)}", 2)
@@ -318,7 +291,8 @@ class AutoDataset(QObject):
 
         if self.do_download_images:
             self.update_information("Phase 1/3: Starting Chrome...", 0)
-            if self.start_browser():
+            chrome_started = self.browser.start()
+            if chrome_started and self.browser.is_ready():
                 self.update_information("Phase 1/3: Downloading images...", 0)
                 self.update_all_information()
                 self.always_switch_to_main_window_thread = Thread(
@@ -327,7 +301,9 @@ class AutoDataset(QObject):
                 with LogContext("Download images", log):
                     self.download_images_data()
             else:
-                self.update_information("Phase 1/3: Download skipped (Chrome not started)", 3)
+                reason = self.browser.last_error or "Chrome start returned without an active driver"
+                self.update_information(
+                    f"Phase 1/3: Download skipped (Chrome not started): {reason}", 2)
         else:
             self.update_information("Phase 1/3: Download skipped (disabled in settings)", 3)
 

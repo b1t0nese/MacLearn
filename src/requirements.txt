@@ -6,12 +6,9 @@ PyQt6
 pywin32; sys_platform == "win32"
 PyYAML
 qdarkstyle
-Requests
 selenium
 undetected_chromedriver
 webdriver_manager
-standard_distutils
 AlbumentationsX==2.0.20
-scipy==1.17.1
 plyer
 -r sam3_studio_lib/requirements.txt
