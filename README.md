@@ -25,7 +25,7 @@
 python -m pip install -r src/requirements.txt
 ```
 
-🧑‍💻 **Разработчик: b1t0ne (Минибаев Артём)**
+🧑‍💻 **Разработчик: she1kah (Минибаев Артём)**
 
 ---
 

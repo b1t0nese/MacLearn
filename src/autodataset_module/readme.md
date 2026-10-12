@@ -166,7 +166,7 @@
 | Компонент | Описание |
 |-----------|----------|
 | `BaseImageSource` | Базовый класс: `__init__(browser)`, `collect(...)`, `stop()` |
-| `collect(subclass_data, on_image, stop_check, status, example_image_path)` | Получить и передать байты изображений |
+| `collect(subclass_data, on_url, stop_check, status, example_image_path)` | Собрать URL изображений |
 | `AVAILABLE_SOURCES` | Реестр источников (`dict[str, type]`) |
 | `DEFAULT_SOURCE` | Источник по умолчанию (`"Yandex"`) |
 | `register_source(name)` | Декоратор регистрации класса источника |
@@ -180,8 +180,8 @@
 |-------|----------|
 | `collect(...)` | Поиск + прокрутка + получение байтов (блокировка окна на время работы) |
 | `_open_search_page(example_image_path, stop_check)` | Поиск по фото-примеру и переход на «Похожие» |
-| `_scroll_and_collect(on_image, stop_check)` | Прокрутка страницы и «Показать ещё» |
-| `_get_image_data(img_element)` | Открыть изображение и получить `src` и байты |
+| `_scroll_and_collect(on_url, stop_check)` | Прокрутка страницы и «Показать ещё» |
+| `_get_image_url(img_element)` | Открыть изображение и получить `src` |
 
 #### Селекторы и таймауты
 

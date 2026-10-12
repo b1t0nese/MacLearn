@@ -4,6 +4,6 @@ __pycache__/
 build_env/
 build/
 logs/
+.DS_Store
 todo.txt
 start.bat
-.DS_Store

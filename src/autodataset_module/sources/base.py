@@ -14,7 +14,7 @@ class BaseImageSource:
     def driver(self):
         return self.browser.driver
 
-    def collect(self, subclass_data: dict, on_image: Callable[[bytes], None],
+    def collect(self, subclass_data: dict, on_url: Callable[[str], None],
                 stop_check: Callable[[], bool], status: Callable[..., None]=None,
                 example_image_path: str=None):
         raise NotImplementedError

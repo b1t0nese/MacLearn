@@ -1,5 +1,6 @@
 from threading import Event, Thread
 from time import sleep
+from urllib.request import Request, urlopen
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QCoreApplication
 from logger import get_logger, LogContext
@@ -106,13 +107,33 @@ class AutoDataset(QObject):
             self.update_information("Validation data enabled", 0)
 
         self._stop_event = Event()
+        collect_stop_event = Event()
+
         def stop_check() -> bool:
             return self._stop_event.is_set() or not self._is_running
 
-        def on_image(image_bytes: bytes):
-            nonlocal downloaded, num_images, num_val_images
+        image_urls = []
+
+        def collect_stop_check() -> bool:
+            return stop_check() or collect_stop_event.is_set()
+
+        def collect_url(image_url: str):
+            if len(image_urls) < num_images + num_val_images:
+                image_urls.append(image_url)
+            if len(image_urls) >= num_images + num_val_images:
+                collect_stop_event.set()
+
+        try:
+            self.source.collect(
+                subclass_data, collect_url, collect_stop_check,
+                self.update_information, self._get_example_image_path(subclass_data))
+        except Exception as e:
+            self.update_information(f"Collect error: {e}", 2)
+            return
+
+        for image_url in image_urls:
             if stop_check():
-                return
+                break
             if num_images > 0:
                 img_type = "default"
             elif num_val_images > 0:
@@ -121,6 +142,9 @@ class AutoDataset(QObject):
                 self._stop_event.set()
                 return
             try:
+                request = Request(image_url, headers={"User-Agent": "Mozilla/5.0"})
+                with urlopen(request, timeout=10) as response:
+                    image_bytes = response.read()
                 image_id = self.project_manager.save_image(image_bytes, class_id, img_type)
                 if img_type == "validation":
                     num_val_images -= 1
@@ -135,16 +159,9 @@ class AutoDataset(QObject):
                     stage_updated=("Download images", (self.downloaded_images_count, self.all_images_count)),
                     cur_image=(self.project_manager.get_full_path("images", image_data["filename"]), np.array([])))
             except Exception as e:
-                self.update_information(f"Download error: {e}", 2)
+                self.update_information(f"Download error: {e}. src: {image_url}", 2)
             if num_images <= 0 and num_val_images <= 0:
                 self._stop_event.set()
-
-        try:
-            self.source.collect(
-                subclass_data, on_image, stop_check,
-                self.update_information, self._get_example_image_path(subclass_data))
-        except Exception as e:
-            self.update_information(f"Collect error: {e}", 2)
 
 
     def download_images_data(self):

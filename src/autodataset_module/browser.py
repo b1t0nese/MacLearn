@@ -1,6 +1,7 @@
 import shutil
 import uuid
 import os
+from threading import Thread
 
 from PyQt6.QtCore import QObject, pyqtSignal
 from undetected_chromedriver import Chrome, ChromeOptions
@@ -46,7 +47,17 @@ class ChromeBrowser(QObject):
 
 
     def is_ready(self) -> bool:
-        return self.driver is not None
+        if self.driver is None:
+            return False
+        process = getattr(getattr(self.driver, "service", None), "process", None)
+        if process is not None and process.poll() is not None:
+            self.driver, self.chrome_pid = None, None
+            return False
+        try:
+            self.driver.current_url
+        except Exception:
+            return False
+        return True
 
 
     def start(self) -> bool:
@@ -145,15 +156,31 @@ class ChromeBrowser(QObject):
 
 
     def _start_driver(self, session_dir: str) -> str:
+        result = {}
+
+        def create_driver():
+            try:
+                driver_kwargs = {"version_main": self.chrome_version, "user_data_dir": session_dir}
+                driver_path = self._resolve_driver_path()
+                if driver_path:
+                    self._prepare_driver_for_macos(driver_path)
+                    driver_kwargs["driver_executable_path"] = driver_path
+                result["driver"] = Chrome(self._build_options(session_dir), **driver_kwargs)
+            except Exception as error:
+                result["error"] = error
+
         try:
             os.makedirs(session_dir, exist_ok=True)
-            driver_path = self._resolve_driver_path()
-            if driver_path:
-                self._prepare_driver_for_macos(driver_path)
-            driver_kwargs = {"version_main": self.chrome_version, "user_data_dir": session_dir}
-            if driver_path:
-                driver_kwargs["driver_executable_path"] = driver_path
-            self.driver = Chrome(self._build_options(session_dir), **driver_kwargs)
+            startup_thread = Thread(target=create_driver, daemon=True)
+            startup_thread.start()
+            startup_thread.join(60)
+            if startup_thread.is_alive():
+                return "Chrome startup timed out after 30 seconds"
+            if "error" in result:
+                raise result["error"]
+            self.driver = result.get("driver")
+            if self.driver is None:
+                return "Chrome driver returned without a session"
             self.chrome_pid = self._get_driver_pid()
             return ""
         except Exception as e:

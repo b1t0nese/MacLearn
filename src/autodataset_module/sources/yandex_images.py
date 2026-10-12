@@ -1,8 +1,8 @@
-import base64
 from urllib.parse import quote as url_quote
 from time import sleep, time as ntime
 
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -29,7 +29,7 @@ class YandexImagesSource(BaseImageSource):
     SIMILAR_TIMEOUT = 30
 
 
-    def collect(self, subclass_data: dict, on_image, stop_check, status=None, example_image_path: str=None):
+    def collect(self, subclass_data: dict, on_url, stop_check, status=None, example_image_path: str=None):
         search_query = subclass_data["search_query"]
         self.browser.lock(True)
         try:
@@ -45,7 +45,7 @@ class YandexImagesSource(BaseImageSource):
             if stop_check():
                 return
             status("Loading images...", 0)
-            self._scroll_and_collect(on_image, stop_check)
+            self._scroll_and_collect(on_url, stop_check)
         finally:
             self.browser.lock(False)
 
@@ -75,7 +75,7 @@ class YandexImagesSource(BaseImageSource):
             return False
 
 
-    def _scroll_and_collect(self, on_image, stop_check):
+    def _scroll_and_collect(self, on_url, stop_check):
         seen_urls = set()
         last_height = self.driver.execute_script("return document.body.scrollHeight")
         while not stop_check():
@@ -87,56 +87,39 @@ class YandexImagesSource(BaseImageSource):
                 new_height = self.driver.execute_script("return document.body.scrollHeight")
                 if ntime() - scroll_start >= self.SCROLL_TIMEOUT:
                     break
-            if ntime() - scroll_start >= self.SCROLL_TIMEOUT or stop_check():
-                try:
-                    self.driver.find_element(By.XPATH, self.XPATH_SHOW_MORE).click()
-                    sleep(1)
-                except:
-                    pass
-                last_height = self.driver.execute_script("return document.body.scrollHeight")
-                continue
+            if stop_check():
+                break
+            page_stopped_growing = ntime() - scroll_start >= self.SCROLL_TIMEOUT
             last_height = new_height
             for img in self.driver.find_elements(By.CSS_SELECTOR, self.CSS_SEARCH_IMAGE):
                 if stop_check():
                     break
-                image_data = self._get_image_data(img)
-                if image_data and image_data[0] not in seen_urls:
-                    seen_urls.add(image_data[0])
-                    on_image(image_data[1])
+                image_url = self._get_image_url(img)
+                if image_url and image_url not in seen_urls:
+                    seen_urls.add(image_url)
+                    on_url(image_url)
+            if page_stopped_growing and not stop_check():
+                try:
+                    self.driver.find_element(By.XPATH, self.XPATH_SHOW_MORE).click()
+                    sleep(1)
+                except Exception as error:
+                    log.warning("⚠ Could not load more images: %s", error)
 
 
-    def _get_image_data(self, img_element) -> tuple[str, bytes] | None:
+    def _get_image_url(self, img_element) -> str | None:
         try:
             self.driver.execute_script("arguments[0].scrollIntoView();", img_element)
             self.driver.execute_script("arguments[0].click();", img_element)
-            img_src = WebDriverWait(self.driver, self.ELEMENT_TIMEOUT).until(
-                EC.presence_of_element_located((By.CLASS_NAME, self.CSS_OPENED_IMAGE))).get_attribute('src')
-            try:
-                image_base64 = self.driver.execute_async_script("""
-                    const url = arguments[0];
-                    const done = arguments[arguments.length - 1];
-                    fetch(url, {credentials: "include"})
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`HTTP ${response.status}`);
-                            }
-                            return response.arrayBuffer();
-                        })
-                        .then(buffer => {
-                            const bytes = new Uint8Array(buffer);
-                            let binary = "";
-                            const chunk_size = 0x8000;
-                            for (let offset = 0; offset < bytes.length; offset += chunk_size) {
-                                binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk_size));
-                            }
-                            done(btoa(binary));
-                        })
-                        .catch(error => done({error: String(error)}));
-                """, img_src)
-                if isinstance(image_base64, dict):
-                    raise RuntimeError(image_base64["error"])
-                return img_src, base64.b64decode(image_base64)
-            finally:
-                self.driver.find_element(By.CSS_SELECTOR, self.CSS_CLOSE_VIEWER).click()
-        except:
+            image_url = WebDriverWait(self.driver, self.ELEMENT_TIMEOUT).until(
+                EC.presence_of_element_located((By.CLASS_NAME, self.CSS_OPENED_IMAGE)))
+            image_url = image_url.get_attribute("src")
+            self.driver.find_element(By.CSS_SELECTOR, self.CSS_CLOSE_VIEWER).click()
+            return image_url
+        except WebDriverException as error:
+            if "invalid session id" in str(error).lower():
+                raise RuntimeError("Browser session was lost while collecting image data") from error
+            log.warning("⚠ Could not collect image data: %s", error)
+            sleep(0.2)
+        except Exception as error:
+            log.warning("⚠ Could not collect image data: %s", error)
             sleep(0.2)
