@@ -1,6 +1,6 @@
-from PyQt6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 from typing import Callable
-from PyQt6 import uic
+from ui_loader import loadUi
 from datetime import datetime
 import logging
 import sys
@@ -39,7 +39,7 @@ class LogsUI(QWidget):
             "[%(asctime)s] %(message)s", datefmt="%H:%M:%S"))
         self._target_logger.addHandler(self._handler)
 
-        uic.loadUi(os.path.join(uis_path, "logswindow.ui"), self)
+        loadUi(os.path.join(uis_path, "logswindow.ui"), self)
         self.btn_action.clicked.connect(self.closeEvent)
 
     def closeEvent(self, e=None):

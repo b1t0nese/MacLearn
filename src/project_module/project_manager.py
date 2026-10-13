@@ -238,7 +238,7 @@ class Dataset:
             try:
                 os.remove(os.path.join(self.images_path, filename))
                 return True
-            except:
+            except FileNotFoundError:
                 return False
 
     def get_image(self, image_id: int = None, filename: str = None) -> dict | None:

@@ -1,6 +1,6 @@
 # MacLearn
 
-![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)![PyQt6](https://img.shields.io/badge/PyQt6-6.x-green.svg)![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)  
+![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)![PySide6](https://img.shields.io/badge/PySide6-6.x-green.svg)![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)  
 [![Downloads](https://img.shields.io/badge/Downloads-latest-brightgreen.svg)](https://github.com/b1t0nese/MacLearn/releases)[![Документация](https://img.shields.io/badge/Документация-MacLearn-green.svg)](https://github.com/b1t0nese/MacLearn/blob/main/doc/documentation.md)[![Документация кода](https://img.shields.io/badge/Документация%20кода-MacLearn-black.svg)](https://github.com/b1t0nese/MacLearn/blob/main/src/readme.md)
 
 **Программа, которая за считанные минуты соберёт для вас качественный датасет из тысяч изображений, скачанных из интернета.**
@@ -24,6 +24,29 @@
 ```bash
 python -m pip install -r src/requirements.txt
 ```
+
+Запуск из исходников:
+
+```bash
+python src/main.py
+```
+
+Сборка Nuitka:
+
+```bash
+# macOS
+./build_macos\(nuitka\).sh
+
+# Windows
+build_windows\(nuitka\).bat
+```
+
+Результат macOS-сборки — `build/MacLearn.app`, Windows-сборки — standalone-версия
+`MacLearn.exe`. Для работы AutoDataset требуется установленный Google Chrome.
+Размер сборки в основном определяется PyTorch, torchvision и OpenCV, которые нужны
+для SAM3-аннотации. Модель `sam3.pt` не включается в приложение и загружается отдельно
+в каталог данных MacLearn. После сборки скрипты выводят 20 крупнейших файлов, чтобы
+можно было определить фактический источник занимаемого места.
 
 🧑‍💻 **Разработчик: she1kah (Минибаев Артём)**
 

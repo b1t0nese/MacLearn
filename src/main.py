@@ -1,9 +1,10 @@
 import argparse
+import hashlib
 import tempfile
 import qdarkstyle
-from PyQt6.QtCore import QThread, QUrl
-from PyQt6.QtGui import QDesktopServices
-from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
+from PySide6.QtCore import QThread, QUrl
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from autodataset_module.autodataset import AutoDataset
 from autodataset_module.photoshop import visualize_bbox, open_image
@@ -30,6 +31,7 @@ class App:
         self.windowUI: MainWindowUI | None = None
         self.statistics_window: StatisticsWindow | None = None
         self.new_project_temp_dir = None
+        self._saved_project_fingerprint = None
         self.close_requested = False
 
         config_info = {k: v for k, v in config.items() if v is not None}
@@ -47,7 +49,7 @@ class App:
         exit_code = -1
         try:
             self.appApplication = qapp
-            self.appApplication.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt6'))
+            self.appApplication.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyside6'))
             log.info("✓ QDarkStyle theme applied")
             exit_code = self.appApplication.exec()
             log.info("🏁 Qt event loop exited with code %d", exit_code)
@@ -126,6 +128,7 @@ class App:
             self.update_dataset_view_in_window()
 
         self.windowUI.autodataset_update_statuses()
+        self._saved_project_fingerprint = self._project_fingerprint()
         self.windowUI.show()
         log.info("✓ Window ready for project: %s", project_path)
 
@@ -138,6 +141,10 @@ class App:
         self.windowUI.dataset_tab.label_title.clicked.connect(self.open_dataset_information)
         self.windowUI.dataset_tab.btn_update_dataset.clicked.connect(self.update_dataset_view_in_window)
         self.windowUI.dataset_tab.btn_export_dataset.clicked.connect(self.export_dataset_data)
+        self.windowUI.dataset_tab.btn_delete_annotations.clicked.connect(lambda _: self.delete_(
+            self.class_delete_annotations, ("Удалить все аннотации?", "Вы уверены, что хотите удалить все аннотации?")))
+        self.windowUI.dataset_tab.btn_delete_dataset.clicked.connect(lambda _: self.delete_(
+            self.class_delete, ("Удалить весь датасет?", "Вы уверены, что хотите удалить весь датасет?")))
         self.windowUI.autodataset_tab.work_tab.btn_start.clicked.connect(self.toggle_autodataset_work)
         self.autodataset_worker_connect_signals(); at = self.windowUI.autodataset_tab; at.orgShowEvent = at.showEvent
         at.showEvent = lambda e: [at.orgShowEvent(e), self.autodataset_worker.update_all_information()][0]
@@ -188,9 +195,9 @@ class App:
                         lambda e=None, c_id=clas["id"], it=images_type: self.export_images_from_class(c_id, it))
                     field.class_delete.clicked.disconnect()
                     field.class_delete.clicked.connect(
-                        lambda e=None, c_id=clas["id"], fw=field, uc=True: self.class_delete_command(c_id, fw, uc))
+                        lambda e=None, c_id=clas["id"], fw=field: self.class_delete(c_id, fw))
                     field.class_delete_annotations.clicked.connect(
-                        lambda e=None, c_id=clas["id"], fw=field, uc=True: self.class_delete_annotations_command(c_id, fw, uc))
+                        lambda e=None, c_id=clas["id"], fw=field: self.class_delete_annotations(c_id, fw))
                     field.class_add_object.clicked.disconnect()
                     field.class_add_object.clicked.connect(
                         lambda e=None, c_id=clas["id"], it=images_type: self.import_image_to_class(c_id, it))
@@ -206,9 +213,9 @@ class App:
                         object_widget.object_delete.clicked.connect(
                             lambda e, img_id=image["id"], tf=field, ow=object_widget: (
                                 self.project_data.del_image(img_id), tf.delete_object(ow), tf.update_layout()))
-                        object_widget.image_data = image.copy()
                     elif object_widget.image_data != image:
                         object_widget.update_object_image(image_data)
+                    object_widget.image_data = image.copy()
                     object_widget.annotation_data = image["annotation"]
                     QApplication.processEvents()
 
@@ -223,43 +230,54 @@ class App:
                 self.windowUI.dataset_delete_class(class_overview, False)
 
 
-    def class_delete_command(self, class_id: int | None=None, field_widget=None, user_call: bool=True):
-        if not self.windowUI.dataset_delete_class_field_widget(field_widget, user_call):
-            return
-        log_window = LogsUI("main"); log_window.show()
-        log_window.log(f'Удаление изображений из класса id={class_id}, type={field_widget.class_name.text()}...\n')
-        QApplication.processEvents()
-        try:
-            all_images = self.project_data.get_images(class_id=class_id, type=field_widget.class_name.text())
-            for i, img in enumerate(all_images):
-                self.project_data.del_image(img["id"])
-                log_window.log(f'Удалено изображение {img["filename"]} {i+1}/{len(all_images)}.')
-                log_window.set_progress(int((i + 1) / len(all_images) * 100))
-                QApplication.processEvents()
-            log_window.log(f'Успех: изображения удалены из класса id={class_id}, type={field_widget.class_name.text()}.', 1)
-        except Exception as e:
-            log_window.log(f'Ошибка: {e}', 1)
-        finally:
-            log_window.wait_while_not_exit()
-            self.update_dataset_view_in_window()
 
-    def class_delete_annotations_command(self, class_id: int | None=None, field_widget=None, user_call: bool=True):
-        log_window = LogsUI("main"); log_window.show()
-        log_window.log(f'Удаление аннотаций из класса id={class_id}, type={field_widget.class_name.text()}...\n')
-        QApplication.processEvents()
-        try:
-            all_images = self.project_data.get_images(class_id=class_id, type=field_widget.class_name.text())
-            for i, img in enumerate(all_images):
-                self.project_data.change_image(img["id"], annotation=[])
-                log_window.log(f'Удалена аннотация изображения {img["filename"]} {i+1}/{len(all_images)}.')
-                log_window.set_progress(int((i + 1) / len(all_images) * 100))
-                QApplication.processEvents()
-            log_window.log(f'Успех: аннотации удалены из класса id={class_id}, type={field_widget.class_name.text()}.', 1)
-        except Exception as e:
-            log_window.log(f'Ошибка: {e}', 1)
-        finally:
-            log_window.wait_while_not_exit()
-            self.update_dataset_view_in_window()
+    def class_delete(self, class_id: int | None=None, field_widget=None, set_log_window: LogsUI=None, user_call: bool=True):
+        if self.windowUI.dataset_delete_class_field_widget(field_widget, user_call):
+            if set_log_window is None:
+                log_window = LogsUI("main"); log_window.show()
+            else:
+                log_window = set_log_window
+            log_window.log(f'Удаление изображений из класса id={class_id}, type={field_widget.class_name.text()}...\n')
+            QApplication.processEvents()
+            try:
+                all_images = self.project_data.get_images(class_id=class_id, type=field_widget.class_name.text())
+                for i, img in enumerate(all_images):
+                    self.project_data.del_image(img["id"])
+                    log_window.log(f'Удалено изображение {img["filename"]} {i+1}/{len(all_images)}.')
+                    log_window.set_progress(int((i + 1) / len(all_images) * 100))
+                    QApplication.processEvents()
+                log_window.log(f'Успех: изображения удалены из класса id={class_id}, type={field_widget.class_name.text()}.', 1)
+            except Exception as e:
+                log_window.log(f'Ошибка: {e}', 1)
+            finally:
+                if set_log_window is None:
+                    log_window.wait_while_not_exit()
+                self.update_dataset_view_in_window()
+
+    def class_delete_annotations(self, class_id: int | None=None, field_widget=None, set_log_window: LogsUI=None, user_call: bool=True):
+        reply = QMessageBox.question(
+            self.windowUI, "Удаление аннотаций в классе", "Вы точно хотите удалить все аннотации изображений в классе?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) if user_call else QMessageBox.StandardButton.Yes
+        if reply == QMessageBox.StandardButton.Yes:
+            if set_log_window is None:
+                log_window = LogsUI("main"); log_window.show()
+            else:
+                log_window = set_log_window
+            log_window.log(f'Удаление аннотаций из класса id={class_id}, type={field_widget.class_name.text()}...\n')
+            QApplication.processEvents()
+            try:
+                all_images = self.project_data.get_images(class_id=class_id, type=field_widget.class_name.text())
+                for i, img in enumerate(all_images):
+                    self.project_data.change_image(img["id"], annotation=[])
+                    log_window.log(f'Удалена аннотация изображения {img["filename"]} {i+1}/{len(all_images)}.')
+                    log_window.set_progress(int((i + 1) / len(all_images) * 100))
+                    QApplication.processEvents()
+                log_window.log(f'Успех: аннотации удалены из класса id={class_id}, type={field_widget.class_name.text()}.', 1)
+            except Exception as e:
+                log_window.log(f'Ошибка: {e}', 1)
+            finally:
+                log_window.wait_while_not_exit()
+                self.update_dataset_view_in_window()
 
     def export_images_from_class(self, class_id: int, images_type: str="default", dist_path: str | None=None):
         dist_path = QFileDialog.getExistingDirectory(
@@ -321,12 +339,6 @@ class App:
             log_window.wait_while_not_exit()
             self.update_dataset_view_in_window()
 
-    def open_dataset_information(self):
-        dataset_information = get_dataset_statistics(self.project_data)
-        self.statistics_window = StatisticsWindow()
-        self.statistics_window.add_information_batch(dataset_information)
-        self.statistics_window.show()
-
 
     def new_project(self):
         if self.new_project_temp_dir is not None:
@@ -346,8 +358,22 @@ class App:
         return (
             current["configuration"] != saved["configuration"] or
             self._normalize_classes(current["classes_conf"]) !=
-            self._normalize_classes(saved["classes"])
+            self._normalize_classes(saved["classes"]) or
+            self._project_fingerprint() != self._saved_project_fingerprint
         )
+
+    def _project_fingerprint(self) -> str:
+        digest = hashlib.sha256()
+        project_path = self.project_data._working_path
+        for root, _, filenames in os.walk(project_path):
+            for filename in sorted(filenames):
+                file_path = os.path.join(root, filename)
+                relative_path = os.path.relpath(file_path, project_path).replace(os.sep, "/")
+                digest.update(relative_path.encode())
+                with open(file_path, "rb") as project_file:
+                    while chunk := project_file.read(1024 * 1024):
+                        digest.update(chunk)
+        return digest.hexdigest()
 
     @staticmethod
     def _normalize_classes(classes: list) -> list:
@@ -373,12 +399,14 @@ class App:
             return False
         if not project_path.endswith(".maclproj"):
             project_path += ".maclproj"
+        self.save_project()
         status, message = self.project_data.save_as(project_path)
         if not status:
             QMessageBox.warning(self.windowUI, "Ошибка", message)
             return False
         self.new_project_temp_dir.cleanup()
         self.new_project_temp_dir = None
+        self._saved_project_fingerprint = self._project_fingerprint()
         return True
 
     def _get_project_configuration(self) -> dict:
@@ -446,6 +474,7 @@ class App:
 
     def save_project(self):
         self.project_data.save(**self._get_project_configuration())
+        self._saved_project_fingerprint = self._project_fingerprint()
         self.windowUI.autodataset_update_statuses()
 
     def save_project_as(self):
@@ -482,6 +511,13 @@ class App:
             else:
                 QMessageBox.warning(self.windowUI, "Ошибка", message)
 
+
+    def open_dataset_information(self):
+        dataset_information = get_dataset_statistics(self.project_data)
+        self.statistics_window = StatisticsWindow()
+        self.statistics_window.add_information_batch(dataset_information)
+        self.statistics_window.show()
+
     def export_dataset_data(self, e=None):
         dataset_path = QFileDialog.getExistingDirectory(None, "Выберите куда разместить датасет.", "")
         if not dataset_path:
@@ -499,6 +535,25 @@ class App:
         if not success:
             QMessageBox.warning(self.windowUI, "Ошибка", message)
         dataset_manager.clear()
+
+    def delete_(self, delete_command: Callable, ask_text: tuple[str], user_call: bool=True):
+        reply = QMessageBox.question(
+            self.windowUI, *ask_text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) if user_call else QMessageBox.StandardButton.Yes
+        logs_window = LogsUI("main"); logs_window.show()
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                for class_name, class_tab in self.windowUI.dataset_tab.classes_tabs.items():
+                    for field in class_tab.fields:
+                        delete_command(self.project_data.get_class_conf(
+                            class_name=class_name)["id"], field, logs_window, False)
+                logs_window.log("Успех: весь датасет удалён.", 1)
+                logs_window.wait_while_not_exit()
+                self.update_dataset_view_in_window()
+            except Exception as e:
+                logs_window.log(f'Ошибка: {e}', 1)
+            finally:
+                logs_window.wait_while_not_exit()
 
 
     def toggle_autodataset_work(self):

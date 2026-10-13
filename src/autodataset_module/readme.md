@@ -72,11 +72,11 @@
 #### Скачивание (`download_images`)
 
 Однопоточная схема:
-- Источник получает содержимое изображения из браузера и передаёт байты callback-функции
-- `Project` сразу сохраняет полученные байты без повторного HTTP-запроса
+- Источник последовательно собирает URL изображений в список
+- После завершения сбора каждый URL последовательно скачивается и сохраняется через `Project`
 
 ```
-источник (sources) ──► image bytes ──► project_manager.save_image()
+источник (sources) ──► URL списка ──► последовательная загрузка ──► project_manager.save_image()
 ```
 
 Источник создаётся в `download_images_data()` из реестра `AVAILABLE_SOURCES`; имя источника
@@ -178,7 +178,7 @@
 
 | Метод | Описание |
 |-------|----------|
-| `collect(...)` | Поиск + прокрутка + получение байтов (блокировка окна на время работы) |
+| `collect(...)` | Поиск + прокрутка + сбор URL (блокировка окна на время работы) |
 | `_open_search_page(example_image_path, stop_check)` | Поиск по фото-примеру и переход на «Похожие» |
 | `_scroll_and_collect(on_url, stop_check)` | Прокрутка страницы и «Показать ещё» |
 | `_get_image_url(img_element)` | Открыть изображение и получить `src` |
@@ -196,7 +196,7 @@
 class MySource(BaseImageSource):
     name = "MySource"
 
-    def collect(self, subclass_data, on_image, stop_check, status=None, example_image_path=None):
+    def collect(self, subclass_data, on_url, stop_check, status=None, example_image_path=None):
         self.browser.lock(True)
         try:
             ...

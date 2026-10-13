@@ -261,15 +261,18 @@ class ImageAnnotationDetector:
         ))
 
 
-    def calculate_bboxes_data(self) -> list[dict]:
+    def calculate_bboxes_data(self, allowed_class_ids: set[int] | None = None) -> list[dict]:
         self.annotations, annotations_data = [], []
         self.detections = self.annotator.annotate(Image.fromarray(self.image))
         for detection in self.detections:
+            class_id = self.class_ids[detection.class_id]
+            if allowed_class_ids is not None and class_id not in allowed_class_ids:
+                continue
             x1, y1, x2, y2 = map(round, detection.box_xyxy)
             contour = np.array([[[x1, y1]], [[x2, y1]], [[x2, y2]], [[x1, y2]]], dtype=np.int32)
             annotation = ImageAnnotation(contour, self.image.shape[:2][::-1])
             data = annotation.get()
-            data["class_id"] = self.class_ids[detection.class_id]
+            data["class_id"] = class_id
             data["score"] = detection.score
             annotations_data.append(data)
             self.annotations.append(annotation)

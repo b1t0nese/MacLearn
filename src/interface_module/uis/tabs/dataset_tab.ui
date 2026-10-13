@@ -107,7 +107,7 @@ QPushButton:pressed {
         <string notr="true">font-size: 13px; font-weight: bold;</string>
        </property>
        <property name="text">
-        <string>🔁 Обновить</string>
+        <string>🔁Обновить</string>
        </property>
       </widget>
      </item>
@@ -135,7 +135,63 @@ QPushButton:pressed {
         <string notr="true">font-size: 13px; font-weight: bold;</string>
        </property>
        <property name="text">
-        <string>📤 Экспорт датасета</string>
+        <string>📤Экспорт датасета</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btn_delete_annotations">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>35</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>35</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-size: 13px; font-weight: bold;</string>
+       </property>
+       <property name="text">
+        <string>❌Аннотации</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btn_delete_dataset">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>35</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>35</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-size: 13px; font-weight: bold;</string>
+       </property>
+       <property name="text">
+        <string>❌Очистить</string>
        </property>
       </widget>
      </item>

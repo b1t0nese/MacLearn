@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QWidget
-from PyQt6.QtCore import QTimer
+from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QTimer
 import win32process
 import win32gui
 import win32con
@@ -117,7 +117,7 @@ class EmbeddedProgramWidget(QWidget):
 
 
 if __name__=="__main__":
-    from PyQt6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
     import sys
     process_name = input('Введите название процесса приложения (пример "chrome.exe"): ')
     app = QApplication(sys.argv)

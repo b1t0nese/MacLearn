@@ -68,6 +68,19 @@ build_windows(nuitka).bat
 3. Компилирует `MacLearn.exe` через **Nuitka** (standalone mode)
 4. Запускает **UPX-сжатие** (`upx_build_compress.bat` — LZMA + best)
 
+### macOS
+
+```bash
+./build_macos\(nuitka\).sh
+```
+
+Скрипт создаёт виртуальное окружение, устанавливает зависимости из
+`src/requirements.txt` и собирает `build/MacLearn.app` через Nuitka с плагином
+PySide6. Для работы сбора изображений Google Chrome устанавливается отдельно.
+Основной размер приложения дают PyTorch, torchvision и OpenCV, необходимые для SAM3;
+веса `sam3.pt` в приложение не включаются. Скрипт выводит крупнейшие файлы сборки
+для диагностики её размера.
+
 ---
 
 ## Использование программы

@@ -1,8 +1,8 @@
-from PyQt6 import uic
-from PyQt6.QtWidgets import (QMainWindow, QWidget, QHeaderView, QTabWidget,
+from PySide6.QtWidgets import (QMainWindow, QWidget, QHeaderView, QTabWidget,
                              QTableWidgetItem, QFileDialog, QVBoxLayout, QMessageBox)
-from PyQt6.QtGui import QImage, QPixmap
-from PyQt6.QtCore import QTimer, Qt
+from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtCore import QTimer, Qt
+from ui_loader import loadUi
 from datetime import datetime
 from typing import Callable
 import numpy as np
@@ -29,7 +29,7 @@ class InformationWidget(QWidget):
     def __init__(self, title: str, parent=None):
         super().__init__(parent)
         ui_file = os.path.join(uis_path, "widgets", "information.ui")
-        self.ui = uic.loadUi(ui_file, self)
+        self.ui = loadUi(ui_file, self)
         self.ui.label_title.setText(title)
         self.table = self.ui.table_info
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -76,7 +76,7 @@ class StatisticsWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         ui_file = os.path.join(uis_path, "statisticswindow.ui")
-        self.ui = uic.loadUi(ui_file, self)
+        self.ui = loadUi(ui_file, self)
         self.stats_layout = self.ui.stats_layout
         self.ui.btn_close.clicked.connect(self.close)
         self.widgets = []
@@ -104,7 +104,7 @@ class ObjectCardWidget(QWidget):
 
     def initUI(self, object_name: str=None, object_image: str | np.ndarray=None,
                name_enabled: bool=True, click_image: Callable=None):
-        uic.loadUi(os.path.join(uis_path, "widgets", "object_card.ui"), self)
+        loadUi(os.path.join(uis_path, "widgets", "object_card.ui"), self)
         self.object_image.my_image_path = ""
         if object_image is not None:
             self.update_object_image(object_image)
@@ -162,7 +162,7 @@ class ClassFieldWidget(QWidget):
 
     def initUI(self, class_name: str=None, enabled: bool=True,
                import_and_export_buttons: bool=True, delete_ann_button: bool=True, name_enabled: bool=True):
-        uic.loadUi(os.path.join(uis_path, "widgets", "class_field.ui"), self)
+        loadUi(os.path.join(uis_path, "widgets", "class_field.ui"), self)
         if not import_and_export_buttons:
             self.class_export_files.deleteLater()
             self.class_import_files.deleteLater()
@@ -249,7 +249,7 @@ class OverviewClassWidget(QWidget):
         self.fields: list[ClassFieldWidget] = []
 
     def initUI(self, class_name: str=None):
-        uic.loadUi(os.path.join(uis_path, "widgets", "overview_class.ui"), self)
+        loadUi(os.path.join(uis_path, "widgets", "overview_class.ui"), self)
         if class_name:
             self.overview_group.setTitle(class_name)
         self.tab_bar.currentChanged.connect(self.scroll_to_field)
@@ -334,14 +334,13 @@ class MainWindowUI(QMainWindow):
         super().__init__()
 
     def initUI(self):
-        uic.loadUi(os.path.join(uis_path, "mainwindow.ui"), self)
+        loadUi(os.path.join(uis_path, "mainwindow.ui"), self)
         self.project_initUI()
         self.dataset_initUI()
         self.autodataset_initUI()
 
-
     def project_initUI(self):
-        self.project_tab = uic.loadUi(os.path.join(uis_path, "tabs", "project_tab.ui"))
+        self.project_tab = loadUi(os.path.join(uis_path, "tabs", "project_tab.ui"))
         self.tabWidget.addTab(self.project_tab, "Проект")
         self.project_tab.project_overview = OverviewClassWidget()
         self.project_tab.project_overview.initUI("Классы объектов")
@@ -362,7 +361,7 @@ class MainWindowUI(QMainWindow):
 
 
     def dataset_initUI(self):
-        self.dataset_tab = uic.loadUi(os.path.join(uis_path, "tabs", "dataset_tab.ui"))
+        self.dataset_tab = loadUi(os.path.join(uis_path, "tabs", "dataset_tab.ui"))
         self.tabWidget.addTab(self.dataset_tab, "Датасет")
         self.dataset_tab.classes_tabs = {}
         self.dataset_resize_timer = QTimer()
@@ -426,7 +425,7 @@ class MainWindowUI(QMainWindow):
     def dataset_delete_class_field_widget(self, field_widget: ClassFieldWidget, user_call: bool=True) -> bool:
         if user_call:
             reply = QMessageBox.question(
-                self, "Удаление данных класса", "Вы точно хотите удалить эти данные?",
+                self, "Удаление класса", "Вы точно хотите удалить этот класс? Все связанные с ним данные будут удалены.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
         if (not user_call) or reply == QMessageBox.StandardButton.Yes:
             field_widget.delete_class()
@@ -468,7 +467,7 @@ class MainWindowUI(QMainWindow):
         self.autodataset_tab.tab_widget.setStyleSheet(
             "QTabWidget { padding: 0px; } "
             "QTabWidget::pane, QTabWidget::pane:selected { border: none; background: transparent; }")
-        self.autodataset_tab.work_tab = uic.loadUi(os.path.join(uis_path, "tabs", "autodataset_tab.ui"))
+        self.autodataset_tab.work_tab = loadUi(os.path.join(uis_path, "tabs", "autodataset_tab.ui"))
         self.autodataset_tab.setLayout(QVBoxLayout())
         self.autodataset_tab.layout().setContentsMargins(0, 0, 0, 0)
         self.autodataset_tab.layout().setSpacing(0)

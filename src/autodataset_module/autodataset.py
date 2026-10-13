@@ -2,9 +2,8 @@ from threading import Event, Thread
 from time import sleep
 from urllib.request import Request, urlopen
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QCoreApplication
+from PySide6.QtCore import QObject, Signal, Slot, QCoreApplication
 from logger import get_logger, LogContext
-from pcfuncs import *
 from project_module.project_manager import Project
 from autodataset_module.browser import ChromeBrowser
 from autodataset_module.photoshop import *
@@ -15,12 +14,12 @@ log = get_logger("autodataset")
 
 
 class AutoDataset(QObject):
-    finished = pyqtSignal()
-    progress = pyqtSignal(int)
-    log_field = pyqtSignal(str, int)
-    cur_image_label = pyqtSignal(str, np.ndarray)
-    stage_updated = pyqtSignal(str, tuple)
-    subclass_updated = pyqtSignal(str, int, str, int)
+    finished = Signal()
+    progress = Signal(int)
+    log_field = Signal(str, int)
+    cur_image_label = Signal(str, np.ndarray)
+    stage_updated = Signal(str, tuple)
+    subclass_updated = Signal(str, int, str, int)
 
 
     def update_information(self, message: str, level: int = 0,
@@ -53,6 +52,7 @@ class AutoDataset(QObject):
         self._is_running = False
         self._stop_event = None
         self._image_downloaded = True
+        self.always_switch_to_main_window_thread: Thread = None
         log.info("▶ Initializing AutoDataset (headless=%s, chrome_version=%s)", not chrome_no_headless, chrome_version)
 
         self.browser = ChromeBrowser(chromedriver_path, chrome_version,
@@ -65,6 +65,8 @@ class AutoDataset(QObject):
         self.downloaded_images_count = 0
         self.created_annotations_count = 0
         self.augmented_images_count = 0
+        self.need_download_to_class = 0
+        self.need_augmented_images_count = 0
         self.all_images_count = 0
 
         self.do_download_images = True
@@ -199,7 +201,8 @@ class AutoDataset(QObject):
         annotation_configuration = self.project_data["configuration"]
         annotation_classes = [
             class_data for class_data in self.project_data["classes"]
-            if class_data["enabled"] and class_data.get("subclasses")]
+            if class_data["enabled"] and class_data.get("subclasses")
+        ]
         annotation_detector = None
         for i, image_data in enumerate(all_images):
             if not self._is_running:
@@ -209,11 +212,11 @@ class AutoDataset(QObject):
             if not image_data["annotation"]:
                 if image is not None and image.size > 0:
                     if annotation_detector is None:
-                        annotation_detector = ImageAnnotationDetector(
-                            image, annotation_classes, annotation_configuration)
+                        annotation_detector = ImageAnnotationDetector(image, annotation_classes, annotation_configuration)
                     else:
                         annotation_detector.image = image
-                    annotation_data = annotation_detector.calculate_bboxes_data()
+                    annotation_data = annotation_detector.calculate_bboxes_data(
+                        allowed_class_ids={image_data["class_id"]})
                     if annotation_data:
                         bboxes = [[item["class_id"]] + list(item["bbox"]) for item in annotation_data]
                         new_img_data = self.project_manager.change_image(image_data["id"], annotation=bboxes)
@@ -238,6 +241,10 @@ class AutoDataset(QObject):
             image_path = self.project_manager.get_full_path("images", image_data["filename"])
             annotations = list(map(lambda x: x[1:], image_data["annotation"]))
             category_ids = list(map(lambda x: x[0], image_data["annotation"]))
+            if not annotations:
+                self.update_information(
+                    f"Augmentation skipped for image #{i + 1}: no annotations", 2)
+                continue
             augmentations = self.project_manager.get_images(parent_image_id=image_data["id"], type="augment")
             if not augmentations:
                 augmentations = generate_augmentations(image_path, annotations, category_ids,
@@ -299,7 +306,7 @@ class AutoDataset(QObject):
             self.stage_updated.emit("Create augmentation data", (self.augmented_images_count, self.need_augmented_images_count))
 
 
-    @pyqtSlot()
+    @Slot()
     def run(self):
         self.update_all_information(True)
         self._is_running, self._image_downloaded = True, True
@@ -349,7 +356,7 @@ class AutoDataset(QObject):
         self.finished.emit()
 
 
-    @pyqtSlot()
+    @Slot()
     def stop(self):
         self.update_information("User requested stop", 2)
         self._is_running = False

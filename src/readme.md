@@ -15,7 +15,7 @@
 - [Модули](#модули)
   - [`project_module`](https://github.com/b1t0nese/MacLearn/blob/main/src/project_module/readme.md) — проекты, SQLite, экспорт
   - [`autodataset_module`](https://github.com/b1t0nese/MacLearn/blob/main/src/autodataset_module/readme.md) — сбор данных, аннотации, аугментация
-  - [`interface_module`](https://github.com/b1t0nese/MacLearn/blob/main/src/interface_module/readme.md) — PyQt6 интерфейс
+  - [`interface_module`](https://github.com/b1t0nese/MacLearn/blob/main/src/interface_module/readme.md) — PySide6 интерфейс
 - [Поток выполнения](#поток-выполнения)
 - [Взаимодействие модулей](#взаимодействие-модулей)
 
@@ -31,7 +31,7 @@
                        │         │
           ┌────────────▼───┐ ┌───▼────────────────┐
           │interface_module│ │ autodataset_module │
-          │   (PyQt6 UI)   │ │  (сбор/аннотации)  │
+          │   (PySide6 UI) │ │  (сбор/аннотации)  │
           └───────┬────────┘ └──────────┬─────────┘
                   │                     │
           ┌───────▼──────────┐  ┌───────▼───────────┐
@@ -50,8 +50,9 @@
 
 ```
 maclearn/
-├── requirements.txt                    # Зависимости проекта
+├── src/requirements.txt                # Зависимости проекта
 ├── build_windows(nuitka).bat           # Сборка Windows (Nuitka + UPX)
+├── build_macos(nuitka).sh              # Сборка macOS (Nuitka)
 ├── upx_build_compress.bat              # UPX-сжатие
 └── src/
     ├── main.py                         # Точка входа, класс App
@@ -102,9 +103,9 @@ maclearn/
 
 | Источник | Что берёт |
 |----------|-----------|
-| `PyQt6.QtWidgets` | QApplication, QFileDialog, QMessageBox |
-| `PyQt6.QtGui` | QDesktopServices |
-| `PyQt6.QtCore` | QThread, QUrl |
+| `PySide6.QtWidgets` | QApplication, QFileDialog, QMessageBox |
+| `PySide6.QtGui` | QDesktopServices |
+| `PySide6.QtCore` | QThread, QUrl |
 | `qdarkstyle` | Тёмная тема |
 | `project_module.project_manager` | `Project`, `get_dataset_statistics` |
 | `autodataset_module.autodataset` | `AutoDataset` |
@@ -318,7 +319,7 @@ install_exception_hook(log)         # Глобальный перехват ис
 
 ## ▶ [interface_module](https://github.com/b1t0nese/MacLearn/blob/main/src/interface_module/readme.md)
 
-PyQt6 интерфейс: главное окно, виджеты, лог-окно, встраивание Chrome.
+PySide6 интерфейс: главное окно, виджеты, лог-окно, встраивание Chrome.
 
 | Файл | Назначение |
 |------|------------|

@@ -47,9 +47,8 @@ result = annotate_images(
 print(result.images_with_objects, result.zip_path)
 ```
 
-Для интеграции с Qt передайте `progress(index, total, path)` и вызывайте
-`annotate_images` из рабочего `QThread`; библиотека не импортирует PyQt или
-Gradio.
+Для интеграции с PySide6 передайте `progress(index, total, path)` и вызывайте
+`annotate_images` из рабочего `QThread`; библиотека не импортирует Qt или Gradio.
 
 ## Публичный API
 

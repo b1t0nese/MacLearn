@@ -3,7 +3,7 @@ import uuid
 import os
 from threading import Thread
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 from undetected_chromedriver import Chrome, ChromeOptions
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.core.driver_cache import DriverCacheManager
@@ -23,10 +23,10 @@ def get_session_dir(session_name: str = "default") -> str:
 
 
 class ChromeBrowser(QObject):
-    ready = pyqtSignal(int)
-    failed = pyqtSignal(str)
-    closed = pyqtSignal()
-    chrome_widget_lock = pyqtSignal(bool)
+    ready = Signal(int)
+    failed = Signal(str)
+    closed = Signal()
+    chrome_widget_lock = Signal(bool)
 
 
     def __init__(self, chromedriver_path: str=None, chrome_version: int=None,
