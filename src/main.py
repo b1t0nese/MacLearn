@@ -55,9 +55,7 @@ class App:
             log.info("🏁 Qt event loop exited with code %d", exit_code)
         except Exception as e:
             log.critical("💀 Critical error in event loop: %s", e, exc_info=True)
-            QMessageBox.warning(
-                self.windowUI, "Critical error",
-                str(e), QMessageBox.StandardButton.Ok)
+            QMessageBox.warning(self.windowUI, "Critical error", str(e), QMessageBox.StandardButton.Ok)
             self.close_application(exit_code)
             raise e
 
@@ -536,7 +534,7 @@ class App:
             QMessageBox.warning(self.windowUI, "Ошибка", message)
         dataset_manager.clear()
 
-    def delete_(self, delete_command: Callable, ask_text: tuple[str], user_call: bool=True):
+    def delete_(self, delete_command: callable, ask_text: tuple[str], user_call: bool=True):
         reply = QMessageBox.question(
             self.windowUI, *ask_text,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) if user_call else QMessageBox.StandardButton.Yes

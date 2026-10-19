@@ -293,7 +293,7 @@ class AutoDataset(QObject):
                                                     for cl in self.project_data["classes"] if cl["enabled"]])\
                                                         * self.project_data["configuration"]["augmentation_count"]
 
-        if self.do_download_images and self.browser.is_ready():
+        if self.do_download_images:
             self.stage_updated.emit("Download images", (self.downloaded_images_count, self.all_images_count))
         for class_data in self.project_data["classes"]:
             if class_data["enabled"]:

@@ -1,5 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
+cd ..
 
 echo ============================================
 echo Prepare environment for build...
