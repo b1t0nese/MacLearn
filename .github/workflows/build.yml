@@ -1,0 +1,109 @@
+name: Build MacLearn
+
+# Сборка onefile-банджей: macOS (.app в .dmg) и Windows (.exe) — PyInstaller не умеет
+# кросс-компиляцию, поэтому каждая платформа собирается на своём раннере.
+# При пуше тега v* оба билда публикуются в GitHub Release.
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # создание Release и загрузка ассетов по тегу
+
+env:
+  PYTHONIOENCODING: utf-8   # Windows-консоль cp1252 не умеет ✓ и кириллицу
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r src/requirements.txt
+          pip install pyinstaller
+
+      - name: Import smoke check
+        run: |
+          python -c "import sys; sys.path.insert(0, 'src'); import main; from interface_module import translations; assert translations.LANGUAGES, 'no translations loaded'; print('smoke ok', translations.LANGUAGES)"
+
+      # add-data кладёт uis и translations в корень бандла (sys._MEIPASS/uis,
+      # sys._MEIPASS/translations) — так их ищет frozen-код модулей интерфейса.
+      # collect-data нужен qdarkstyle (.qss) и ultralytics (cfg .yaml) — их package
+      # data PyInstaller по импортам не видит.
+      # onedir (не onefile): torch на импорте поднимает multiprocessing-детей, и в
+      # macOS onefile они падают на dlopen Qt-фреймворков; в onedir всё чисто.
+      - name: Build onedir app + dmg
+        run: |
+          pyinstaller --noconfirm --clean --onedir --windowed --name MacLearn \
+            --add-data "src/interface_module/uis:uis" \
+            --add-data "src/interface_module/translations:translations" \
+            --collect-data qdarkstyle \
+            --collect-data ultralytics \
+            src/main.py
+          # .app — это папка, в releases можно класть только файлы → стандартный dmg
+          hdiutil create -volname "MacLearn" -srcfolder dist/MacLearn.app \
+            -ov -format UDZO MacLearn.dmg
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacLearn-macOS
+          path: MacLearn.dmg
+
+      - name: Attach to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MacLearn.dmg
+          generate_release_notes: true
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r src/requirements.txt
+          pip install pyinstaller
+
+      - name: Import smoke check
+        run: |
+          python -c "import sys; sys.path.insert(0, 'src'); import main; from interface_module import translations; assert translations.LANGUAGES, 'no translations loaded'; print('smoke ok', translations.LANGUAGES)"
+
+      - name: Build onefile exe
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name MacLearn `
+            --add-data "src/interface_module/uis;uis" `
+            --add-data "src/interface_module/translations;translations" `
+            --collect-data qdarkstyle `
+            --collect-data ultralytics `
+            src/main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacLearn-windows
+          path: dist/MacLearn.exe
+
+      - name: Attach to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/MacLearn.exe
+          generate_release_notes: true

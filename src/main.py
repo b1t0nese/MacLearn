@@ -1,6 +1,7 @@
 import argparse
 import hashlib
 import logging
+import multiprocessing
 import tempfile
 import qdarkstyle
 from PySide6.QtCore import QThread, QUrl
@@ -830,6 +831,7 @@ class App:
 
 
 def main():
+    multiprocessing.freeze_support()
     global app, application
 
     arg_parser = argparse.ArgumentParser(

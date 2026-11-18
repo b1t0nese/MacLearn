@@ -7,3 +7,6 @@ logs/
 .DS_Store
 todo.txt
 start.bat
+dist/
+MacLearn.spec
+*.dmg
