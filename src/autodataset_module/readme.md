@@ -215,22 +215,24 @@ class MySource(BaseImageSource):
 | `open_image(file_path, color)` | Загрузка изображения (поддержка кириллических путей через np.fromfile) |
 | `resize_image(img, target_size)` | Ресайз с сохранением пропорций |
 | `visualize_bbox(img, bboxes, colors)` | Рисование bounding boxes на изображении |
-| `generate_augmentations(image_path, bboxes, category_ids, n)` | Генерация N аугментированных вариаций |
+| `generate_augmentations(image_path, bboxes, category_ids, n, preset)` | Генерация N аугментированных вариаций |
 
 ### `generate_augmentations`
 
-Использует **Albumentations** со случайными параметрами:
+Использует **Albumentations** со случайными параметрами; вероятности групп
+задаются пресетом (`preset`, по умолчанию `settings.DEFAULT_AUGMENTATION_PRESET`,
+настраивается в окне настроек приложения):
 
-| Трансформация | Вероятность |
-|---------------|-------------|
-| `AtLeastOneBBoxRandomCrop` | 0.5 |
-| `HorizontalFlip` | 0.3 |
-| `VerticalFlip` | 0.2 |
-| `RandomRotate90` | 0.3 |
-| `ShiftScaleRotate` | 0.4 |
-| `OneOf(Brightness/HueSaturation/ColorJitter)` | 0.5 |
-| `OneOf(Gauss/ISO/Multiplicative Noise)` | 0.3 |
-| `OneOf(Blur/GaussianBlur/MedianBlur)` | 0.2 |
+| Трансформация | Ключ пресета | Вероятность по умолчанию |
+|---------------|--------------|--------------------------|
+| `AtLeastOneBBoxRandomCrop` | `crop` | 0.5 |
+| `HorizontalFlip` | `hflip` | 0.3 |
+| `VerticalFlip` | `vflip` | 0.2 |
+| `RandomRotate90` | `rotate90` | 0.3 |
+| `ShiftScaleRotate` | `shift_scale_rotate` | 0.4 |
+| `OneOf(Brightness/HueSaturation/ColorJitter)` | `color` | 0.5 |
+| `OneOf(Gauss/ISO/Multiplicative Noise)` | `noise` | 0.3 |
+| `OneOf(Blur/GaussianBlur/MedianBlur)` | `blur` | 0.2 |
 
 Аннотации автоматически пересчитываются (BboxParams format='coco', min_visibility=0.2).
 
@@ -248,24 +250,23 @@ class MySource(BaseImageSource):
 
 ### Класс `ImageAnnotationDetector`
 
-Автоматическое выделение объектов.
+Автоматическое выделение объектов через SAM3 (`sam3_studio_lib`). Настройки
+детектора (`sam3_device`, `sam3_confidence`, `sam3_min_box_area_px`,
+`sam3_one_detection_per_class`, `sam3_weights_path`) берутся из мержа
+настроек приложения и конфигурации проекта — см. `autodataset.py`.
 
 | Метод | Описание |
 |-------|----------|
-| `__init__(image, max_objects, min_object_area)` | Детектор (по умолчанию 1 объект, мин. 5000px) |
-| `remove_bg()` | Запуск SAM3 по промптам классов |
-| `detect_contours()` | Совместимый пустой этап после SAM3 |
-| `smooth_contours()` | Совместимый пустой этап после SAM3 |
-| `filter_contours_to_needed()` | Совместимый пустой этап после SAM3 |
-| `calculate_bboxes_data()` | Преобразование результатов SAM3 в bbox |
-| `put_contours_on_image(...)` | Рисование на изображении |
+| `__init__(image, classes_conf, configuration)` | Детектор: изображение, конфиг классов (текстовые промпты подклассов), настройки; SAM3-аннотатор создаётся лениво — при первом изображении фазы |
+| `calculate_bboxes_data(allowed_class_ids)` | SAM3 по промптам классов → bbox (class_id, x, y, w, h, score); опциональный фильтр по классам |
+| `put_contours_on_image(image, ...)` | Рисование рамок на изображении |
 
 #### Алгоритм детекции
 
 ```
 Исходное изображение
   → SAM3 текстовые промпты классов
-  → NMS и фильтрация площади
+  → фильтр confidence и мин. площади бокса
   → bounding box
 ```
 
@@ -278,11 +279,12 @@ autodataset.py  ──►  project_module.project_manager (Project, SerialDatase
               ──►  .browser (ChromeBrowser)
               ──►  .sources (AVAILABLE_SOURCES, DEFAULT_SOURCE, create_source)
               ──►  .photoshop (все функции)
+              ──►  settings (load_settings — SAM3 и пресет аугментаций)
               ──►  pcfuncs
               ──►  logger (get_logger, LogContext)
 browser.py      ──►  undetected_chromedriver, webdriver_manager
               ──►  pcfuncs (get_appdata_dir), logger
 sources/*       ──►  .base (BaseImageSource, register_source)
               ──►  ../browser (ChromeBrowser), selenium, logger
-photoshop.py  ──► cv2, albumentations, sam3_studio_lib, numpy
+photoshop.py  ──► cv2, albumentations, sam3_studio_lib, numpy, settings
 ```

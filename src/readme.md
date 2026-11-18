@@ -12,6 +12,7 @@
   - [`src/main.py` — точка входа, главный контроллер](#srcmainpy)
   - [`src/logger.py` — система логирования](#srcloggerpy)
   - [`src/pcfuncs.py` — утилиты](#srcpcfuncspy)
+  - [`src/settings.py` — настройки приложения](#srcsettingspy)
 - [Модули](#модули)
   - [`project_module`](https://github.com/b1t0nese/MacLearn/blob/main/src/project_module/readme.md) — проекты, SQLite, экспорт
   - [`autodataset_module`](https://github.com/b1t0nese/MacLearn/blob/main/src/autodataset_module/readme.md) — сбор данных, аннотации, аугментация
@@ -51,14 +52,12 @@
 ```
 maclearn/
 ├── src/requirements.txt                # Зависимости проекта
-├── build_windows(nuitka).bat           # Сборка Windows (Nuitka + UPX)
-├── build_macos(nuitka).sh              # Сборка macOS (Nuitka)
-├── upx_build_compress.bat              # UPX-сжатие
+├── scripts/                            # Скрипты сборки (Nuitka)
 └── src/
     ├── main.py                         # Точка входа, класс App
     ├── logger.py                       # Система логирования
     ├── pcfuncs.py                      # Утилиты
-    ├── start.bat                       # Быстрый запуск
+    ├── settings.py                     # Настройки приложения (settings.json)
     ├── autodataset_module/
     │   ├── autodataset.py              # AutoDataset (QObject)
     │   ├── browser.py                  # ChromeBrowser — ленивый запуск Chrome, кэш
@@ -71,14 +70,21 @@ maclearn/
     │   ├── dataset_manager.py          # Экспорт (YOLO, CSV)
     │   └── __init__.py
     ├── interface_module/
-        ├── window.py                   # MainWindowUI, виджеты
+        ├── window.py                   # MainWindowUI, виджеты, drag & drop
         ├── logs_window.py              # Окно логов
+        ├── settings_window.py          # Окно настроек (вкладки)
+        ├── image_editor.py             # Редактор аннотаций (QGraphicsView)
+        ├── shortcuts.py                # Горячие клавиши и подсказки
+        ├── translations.py             # Загрузчик переводов + retranslate
+        ├── translations/               # Файлы переводов (ru.json, en.json, ...)
         ├── embedded_program_qt.py      # Встраивание Chrome
         ├── __init__.py
         └── uis/                        # Qt Designer .ui
             ├── mainwindow.ui
             ├── logswindow.ui
             ├── statisticswindow.ui
+            ├── settingswindow.ui
+            ├── editorwindow.ui
             ├── tabs/
             │   ├── project_tab.ui
             │   ├── dataset_tab.ui
@@ -104,17 +110,23 @@ maclearn/
 | Источник | Что берёт |
 |----------|-----------|
 | `PySide6.QtWidgets` | QApplication, QFileDialog, QMessageBox |
-| `PySide6.QtGui` | QDesktopServices |
+| `PySide6.QtGui` | QAction, QActionGroup, QDesktopServices |
 | `PySide6.QtCore` | QThread, QUrl |
 | `qdarkstyle` | Тёмная тема |
 | `project_module.project_manager` | `Project`, `get_dataset_statistics` |
 | `autodataset_module.autodataset` | `AutoDataset` |
+| `autodataset_module.browser` | `get_session_dir` |
 | `project_module.dataset_manager` | `AVAILABLE_FORMATS` |
 | `interface_module.window` | `MainWindowUI`, `StatisticsWindow` |
 | `interface_module.logs_window` | `LogsUI` |
+| `interface_module.settings_window` | `SettingsWindow` |
+| `interface_module.image_editor` | `ImageEditWindow` |
+| `interface_module.shortcuts` | `ShortcutBinder` |
+| `interface_module.translations` | `LANGUAGES`, `get_language`, `set_language`, `retranslate`, `tr` |
 | `autodataset_module.photoshop` | `visualize_bbox`, `open_image` |
 | `pcfuncs` | Кроссплатформенные утилиты и запуск новых экземпляров |
-| `logger` | `get_logger`, `log_call`, `LogContext`, `SessionLogger`, `install_exception_hook` |
+| `logger` | `get_logger`, `log_call`, `LogContext`, `SessionLogger`, `install_exception_hook`, `set_console_level` |
+| `settings` | `load_settings`, `save_settings` |
 
 ### Глобальная инициализация
 
@@ -141,13 +153,20 @@ install_exception_hook(log)         # Глобальный перехват ис
 
 | Метод | Описание |
 |-------|----------|
-| `__init__(self, **config)` | Инициализация, старт сессии, открытие проекта |
+| `__init__(self, **config)` | Загрузка настроек, язык, старт сессии, открытие проекта |
 | `start(app)` | Запуск Qt event loop с тёмной темой |
 | `close_application(event, exit_code)` | Корректное закрытие (воркер → окна → user later GUI) |
 | `new_window(project_path)` | Создание окна для проекта (3 этапа: Project, AutoDataset, UI) |
 | `init_config_window()` | Подключение сигналов UI-элементов |
+| `init_language_menu()` | Заполнение меню «Язык / Language» (QUiLoader игнорирует подменю из .ui) |
+| `change_language(code)` | Смена языка: перевод, сохранение в настройки |
+| `open_settings_window()` | Открыть окно настроек |
+| `apply_app_settings(settings)` | Сохранить настройки, применить Chrome/сессию к живому воркеру |
 | `init_project_conf_in_window()` | Загрузка конфигурации проекта в UI |
 | `update_dataset_view_in_window()` | Синхронизация UI датасета с БД |
+| `open_image_editor(image_id)` | Открыть редактор аннотаций (окно переиспользуется по image_id) |
+| `move_image_to_class(card, class_id, field)` | Drag&drop изображения: перенос записи в БД |
+| `drop_images_to_class(paths, class_id, type)` | Drag&drop файлов из проводника: импорт в класс |
 | `open_project(project_path)` | Открыть проект |
 | `new_project()` | Создать пустой проект `.maclproj` и открыть его |
 | `open_project_as_dir()` | Открыть проект как папку (диалог) |
@@ -161,6 +180,10 @@ install_exception_hook(log)         # Глобальный перехват ис
 | `on_autodataset_finished()` | Колбэк по завершении + уведомление |
 | `autodataset_worker_connect_signals()` | Подключение сигналов воркера к UI |
 | `autodataset_worker_disconnect_signals()` | Отключение сигналов |
+
+`__init__` загружает `settings.json` (`load_settings()`), применяет язык (`set_language`)
+и мержит CLI-аргументы с настройками: параметры Chrome берутся из CLI, если переданы,
+иначе из сохранённых настроек (`_apply_chrome_settings`).
 
 #### Поток воркера
 
@@ -182,6 +205,9 @@ install_exception_hook(log)         # Глобальный перехват ис
 | `--chrome-version VERSION` | int | Версия Chrome |
 | `--chromedriver-path PATH` | str | Путь к chromedriver |
 | `--chrome-no-headless` | flag | Показать окно Chrome; по умолчанию headless |
+| `--chrome-session NAME` | str | Имя сессии браузера (отдельный профиль/кэш) |
+| `--language ru\|en` | str | Язык интерфейса (переопределяет настройку) |
+| `--log-level DEBUG\|INFO\|WARNING\|ERROR` | str | Уровень консольных логов (`set_console_level`) |
 
 ---
 
@@ -234,6 +260,12 @@ install_exception_hook(log)         # Глобальный перехват ис
 | `main` | INFO |
 | `autodataset` | DEBUG |
 | Прочие | DEBUG |
+
+### Консольный уровень
+
+`set_console_level(level)` меняет уровень **консольного** вывода у всех уже созданных
+и будущих логгеров (файловые хендлеры всегда пишут всё). Вызывается из `main()`
+при передаче `--log-level`.
 
 ---
 
@@ -295,6 +327,25 @@ install_exception_hook(log)         # Глобальный перехват ис
 
 ---
 
+## `src/settings.py`
+
+**Роль:** настройки приложения, общие для всех проектов. Хранятся в `settings.json`
+в папке данных приложения.
+
+| Компонент | Описание |
+|-----------|----------|
+| `DEFAULT_SETTINGS` | Дефолты: язык, Chrome (путь/версия/headless/сессия), SAM3 (device/confidence/мин. площадь/веса/одно обнаружение), `augmentation_preset` |
+| `DEFAULT_AUGMENTATION_PRESET` | Вероятности трансформаций Albumentations (crop, hflip, vflip, rotate90, shift_scale_rotate, color, noise, blur) |
+| `get_settings_path()` | Путь к `settings.json` |
+| `load_settings()` | Загрузка с мержем дефолтов (неизвестные ключи отбрасываются) |
+| `save_settings(settings)` | Сохранение в JSON |
+
+Приоритет значений: **CLI-аргумент** → **settings.json** → **дефолт**. Настройки SAM3
+и пресет аугментаций подмешиваются в конфигурацию автодатасета, не перезаписывая
+настройки проекта (`autodataset.py` мержит `{**load_settings(), **configuration}`).
+
+---
+
 # Модули
 
 ## ▶ [project_module](https://github.com/b1t0nese/MacLearn/blob/main/src/project_module/readme.md)
@@ -319,12 +370,16 @@ install_exception_hook(log)         # Глобальный перехват ис
 
 ## ▶ [interface_module](https://github.com/b1t0nese/MacLearn/blob/main/src/interface_module/readme.md)
 
-PySide6 интерфейс: главное окно, виджеты, лог-окно, встраивание Chrome.
+PySide6 интерфейс: главное окно, виджеты, лог-окно, настройки, редактор аннотаций, переводы, горячие клавиши, встраивание Chrome.
 
 | Файл | Назначение |
 |------|------------|
-| `window.py` | `MainWindowUI`, `StatisticsWindow`, виджеты |
+| `window.py` | `MainWindowUI`, `StatisticsWindow`, виджеты, drag & drop |
 | `logs_window.py` | `LogsUI` + `LogsUIHandler` |
+| `settings_window.py` | `SettingsWindow` — окно настроек по вкладкам |
+| `image_editor.py` | `ImageEditWindow` — ручная правка bounding boxes |
+| `shortcuts.py` | `ShortcutBinder` — горячие клавиши окон и меню |
+| `translations.py` | Загрузка `translations/*.json`, `tr()`, `retranslate()` |
 | `embedded_program_qt.py` | `EmbeddedProgramWidget` (Win32 HWND) |
 
 ---
@@ -336,16 +391,19 @@ PySide6 интерфейс: главное окно, виджеты, лог-ок
 ```
 main()
   └─ argparse (парсинг CLI)
+  └─ set_console_level(--log-level)
   └─ QApplication
   └─ App(**config)
+       ├─ load_settings() + set_language() + _apply_chrome_settings()
        ├─ session.start()
        ├─ open_project(path)
        │    └─ Project(path)           # инициализация SQLite
        │    └─ AutoDataset(...)        # ChromeBrowser без запуска Chrome
        │    └─ MainWindowUI.initUI()
-       │    └─ init_config_window()    # сигналы UI
+       │    └─ init_config_window()    # сигналы UI, меню языка
        │    └─ init_project_conf_in_window()
        │    └─ update_dataset_view_in_window()
+       │    └─ retranslate() + ShortcutBinder()
        │    └─ windowUI.show()
   └─ app.start(application)
        ├─ qdarkstyle
@@ -382,17 +440,18 @@ start_autodataset()
 │  interface │◄──────────────────────────────►│  autodataset    │
 │  _module   │  log_field/cur_image/...       │  _module        │
 └────────────┘                                └─────────────────┘
-      │  import / handler                          │  import
+      │  import / handler                          │  settings
       ▼                                            ▼
 ┌─────────────────────┐                ┌──────────────────────┐
-│    logger.py        │◄───────────────│      pcfuncs.py      │
-│ (общий для всех)    │                │  (процессы/пути)     │
+│    logger.py        │◄───────────────│  pcfuncs.py /        │
+│ (общий для всех)    │                │  settings.py         │
 └─────────────────────┘                └──────────────────────┘
 ```
 
 - **main.py** — оркестратор, не имеет своей бизнес-логики, только связывает.
 - **project_module** — не зависит от UI, чистая работа с данными.
-- **autodataset_module** — зависит от project_module (Project), pcfuncs и Selenium.
-- **interface_module** — зависит от logger (handler для окна логов), автодатасета (сигналы).
+- **autodataset_module** — зависит от project_module (Project), settings, pcfuncs и Selenium.
+- **interface_module** — зависит от logger (handler для окна логов), translations, shortcuts, автодатасета (сигналы).
+- **settings.py** — независимый (только pcfuncs), общие настройки приложения.
 - **logger.py** — независимый, используется всеми.
 - **pcfuncs.py** — независимый, низкоуровневые утилиты.

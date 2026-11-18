@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 from sam3_studio_lib import AnnotationConfig, ClassConfig, Sam3Annotator
 from pcfuncs import get_appdata_dir
+from settings import DEFAULT_AUGMENTATION_PRESET
 
 
 
@@ -50,10 +51,11 @@ def visualize_bbox(img: MatLike, bboxes: list[list[int]], classes_colors: list[t
 
 
 
-def generate_augmentations(image_path, bboxes_xywh, category_ids, n=5):
+def generate_augmentations(image_path, bboxes_xywh, category_ids, n=5, preset: dict=None):
     image = cv2.imread(image_path)
     if image is None:
         return []
+    preset = {**DEFAULT_AUGMENTATION_PRESET, **(preset or {})}
     image_height, image_width = image.shape[:2]
     valid_bboxes, valid_category_ids = [], []
     for bbox, category_id in zip(bboxes_xywh, category_ids):
@@ -74,14 +76,14 @@ def generate_augmentations(image_path, bboxes_xywh, category_ids, n=5):
         pipeline = AX.Compose([
             AX.AtLeastOneBBoxRandomCrop(
                 height=np.random.randint(h//2, h),
-                width=np.random.randint(w//2, w), p=0.5),
-            AX.HorizontalFlip(p=0.3),
-            AX.VerticalFlip(p=0.2),
-            AX.RandomRotate90(p=0.3),
+                width=np.random.randint(w//2, w), p=preset["crop"]),
+            AX.HorizontalFlip(p=preset["hflip"]),
+            AX.VerticalFlip(p=preset["vflip"]),
+            AX.RandomRotate90(p=preset["rotate90"]),
             AX.ShiftScaleRotate(
                 shift_limit=np.random.uniform(0, 0.2),
                 scale_limit=np.random.uniform(0, 0.3),
-                rotate_limit=np.random.randint(10, 45), p=0.4),
+                rotate_limit=np.random.randint(10, 45), p=preset["shift_scale_rotate"]),
             AX.OneOf([
                 AX.RandomBrightnessContrast(
                     brightness_limit=np.random.uniform(0.1, 0.3),
@@ -95,7 +97,7 @@ def generate_augmentations(image_path, bboxes_xywh, category_ids, n=5):
                     contrast=np.random.uniform(0.1, 0.3),
                     saturation=np.random.uniform(0.1, 0.3),
                     hue=np.random.uniform(0.05, 0.15), p=1.0),
-            ], p=0.5),
+            ], p=preset["color"]),
             AX.OneOf([
                 AX.GaussNoise(p=1.0),
                 AX.ISONoise(
@@ -104,12 +106,12 @@ def generate_augmentations(image_path, bboxes_xywh, category_ids, n=5):
                     p=1.0),
                 AX.MultiplicativeNoise(
                     multiplier=(0.9, 1.1), p=1.0),
-            ], p=0.3),
+            ], p=preset["noise"]),
             AX.OneOf([
                 AX.Blur(blur_limit=(3, 7), p=1.0),
                 AX.GaussianBlur(blur_limit=(3, 7), p=1.0),
                 AX.MedianBlur(blur_limit=7, p=1.0),
-            ], p=0.2),
+            ], p=preset["blur"]),
         ], bbox_params=AX.BboxParams(
             coord_format='coco', label_fields=['category_ids'],
             min_visibility=0.2, clip_after_transform=True, min_area=50))
@@ -250,10 +252,8 @@ class ImageAnnotationDetector:
         ]
         return Sam3Annotator(AnnotationConfig.for_classes(
             classes,
-            self.configuration.get(
-                "sam3_weights_path",
+            self.configuration.get("sam3_weights_path") or
                 os.path.join(get_appdata_dir("models"), "sam3.pt"),
-            ),
             device=self.configuration.get("sam3_device", "cpu"),
             confidence=self.configuration.get("sam3_confidence", 0.15),
             min_box_area_px=self.configuration.get("sam3_min_box_area_px", 100.0),

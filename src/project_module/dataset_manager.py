@@ -7,8 +7,11 @@ import csv
 import cv2
 import os
 
+from logger import get_logger
 from .project_manager import Project
 from autodataset_module.photoshop import *
+
+log = get_logger("dataset")
 
 
 
@@ -48,8 +51,10 @@ class BaseDataset(Project):
                     shutil.copytree(source_item, dest_item, dirs_exist_ok=True)
                 else:
                     shutil.copy2(source_item, dest_item)
+            log.info("✓ Dataset copied to: %s", dataset_path)
             return True, f"Датасет успешно перемещён по пути: {dataset_path}"
         except Exception as e:
+            log.error("✗ Dataset copy failed: %s", e)
             return False, f"Датасет не был перемещён по новому пути. Ошибка: {e}"
 
 
@@ -128,11 +133,13 @@ class YOLOdataset(BaseDataset):
             classes_config = self.get_all_classes_conf(True)
         for i, clas in enumerate(classes_config):
             class_images = self.get_images(class_id=clas["id"])
+            log.info("▶ Exporting class %s: %d images", clas["class_name"], len(class_images))
             for image in class_images:
                 image_path = self.get_full_path("images", image["filename"])
                 class_path = self.get_full_path("dataset", "train" if not image["type"]=="validation" else "val", str(i))
                 dist_path = os.path.join(class_path, image["filename"])
                 export_image(image_path, dist_path, tuple(map(int, images_size.split("x"))))
+                log.debug("Exported image: %s -> %s", image["filename"], dist_path)
         self.add_skipped_paths()
 
 
@@ -159,13 +166,17 @@ class YOLOdataset(BaseDataset):
         try:
             classes_config = self.get_all_classes_conf(True)
             project_conf = self.get_configutation()
+            log.info("▶ YOLO export started: %d classes, annotation=%s",
+                     len(classes_config), project_conf["annotation"])
             self.create_paths(len(classes_config), project_conf["annotation"])
             self.create_yaml_config(classes_config)
             self.export_data(classes_config, project_conf["images_size"])
             if project_conf["annotation"]:
                 self.create_annotations()
+            log.info("✓ Dataset exported: %s", self.get_full_path("dataset"))
             return True, f"Датасет успешно экспортирован по пути: {self.get_full_path("dataset")}"
         except Exception as e:
+            log.error("✗ YOLO export failed: %s", e, exc_info=True)
             return False, f"Датасет не был создан. Ошибка: {e}"
 
 
@@ -255,8 +266,11 @@ class CSVdataset(BaseDataset):
             classes_config = self.get_all_classes_conf(True)
             project_conf = self.get_configutation()
             self.create_paths()
+            log.info("▶ CSV export started: %d classes", len(classes_config))
             self.export_data(classes_config, project_conf["images_size"])
             self.create_annotations()
+            log.info("✓ CSV dataset exported: %s", self.get_full_path("dataset"))
             return True, f"CSV датасет успешно экспортирован по пути: {self.get_full_path('dataset')}"
         except Exception as e:
+            log.error("✗ CSV export failed: %s", e, exc_info=True)
             return False, f"Датасет не был создан. Ошибка: {e}"

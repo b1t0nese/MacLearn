@@ -1,10 +1,12 @@
 from PySide6.QtWidgets import QApplication, QWidget
 from typing import Callable
-from ui_loader import loadUi
 from datetime import datetime
 import logging
 import sys
 import os
+
+from interface_module.ui_loader import loadUi
+from interface_module.shortcuts import ShortcutBinder
 
 
 if getattr(sys, 'frozen', False):
@@ -41,6 +43,7 @@ class LogsUI(QWidget):
 
         loadUi(os.path.join(uis_path, "logswindow.ui"), self)
         self.btn_action.clicked.connect(self.closeEvent)
+        self.shortcut_binder = ShortcutBinder(self)
 
     def closeEvent(self, e=None):
         self.opened = False

@@ -73,6 +73,10 @@ def _get_log_dir() -> str:
     return log_dir
 
 
+_CONSOLE_LOG_LEVEL = None
+
+
+
 def setup_logger(name: str = None, level: int = logging.DEBUG,
                  log_file: str = None, console: bool = True) -> logging.Logger:
     logger = logging.getLogger(name)
@@ -92,7 +96,7 @@ def setup_logger(name: str = None, level: int = logging.DEBUG,
 
     if console:
         console_handler = logging.StreamHandler(sys.stderr)
-        console_handler.setLevel(level)
+        console_handler.setLevel(_CONSOLE_LOG_LEVEL if _CONSOLE_LOG_LEVEL is not None else level)
         console_handler.setFormatter(ColoredFormatter())
         logger.addHandler(console_handler)
 
@@ -110,6 +114,17 @@ def get_logger(name: str = None) -> logging.Logger:
     else:
         level = logging.DEBUG
     return setup_logger(name, level=level)
+
+
+def set_console_level(level: int) -> int:
+    global _CONSOLE_LOG_LEVEL
+    _CONSOLE_LOG_LEVEL = level
+    for logger_name in list(logging.root.manager.loggerDict) + [None]:
+        logger = logging.getLogger(logger_name)
+        for handler in logger.handlers:
+            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+                handler.setLevel(level)
+    return level
 
 
 def log_call(logger: logging.Logger = None, level: int = logging.DEBUG):

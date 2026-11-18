@@ -4,6 +4,7 @@ from urllib.request import Request, urlopen
 
 from PySide6.QtCore import QObject, Signal, Slot, QCoreApplication
 from logger import get_logger, LogContext
+from settings import load_settings
 from project_module.project_manager import Project
 from autodataset_module.browser import ChromeBrowser
 from autodataset_module.photoshop import *
@@ -198,7 +199,7 @@ class AutoDataset(QObject):
         for images_type in ["default", "validation"]:
             all_images += self.project_manager.get_images(type=images_type)
         self.all_images_count = len(all_images)
-        annotation_configuration = self.project_data["configuration"]
+        annotation_configuration = {**load_settings(), **self.project_data["configuration"]}
         annotation_classes = [
             class_data for class_data in self.project_data["classes"]
             if class_data["enabled"] and class_data.get("subclasses")
@@ -248,7 +249,8 @@ class AutoDataset(QObject):
             augmentations = self.project_manager.get_images(parent_image_id=image_data["id"], type="augment")
             if not augmentations:
                 augmentations = generate_augmentations(image_path, annotations, category_ids,
-                                                    self.project_data["configuration"]["augmentation_count"])
+                                                    self.project_data["configuration"]["augmentation_count"],
+                                                    load_settings().get("augmentation_preset"))
             for j, augmented in enumerate(augmentations):
                 if augmented.get("id") is None:
                     bytes_image = cv2.imencode('.jpg', augmented["image"])[1].tobytes()

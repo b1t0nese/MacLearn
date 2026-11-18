@@ -10,7 +10,10 @@ import uuid
 import tempfile
 import zipfile
 
+from logger import get_logger
 from autodataset_module.photoshop import open_image
+
+log = get_logger("project")
 
 
 
@@ -94,6 +97,7 @@ class Dataset:
                     ON UPDATE CASCADE);""")
 
             con.commit()
+        log.info("✓ Database initialized: %s", self.database_path)
 
 
     def set_configutation(self, conf_data: dict):
@@ -104,6 +108,7 @@ class Dataset:
                 cur.execute("INSERT INTO configuration(key, value)" + \
                             " VALUES(?, ?)", (key, str(value)))
             con.commit()
+        log.debug("Configuration updated: %s", conf_data)
 
     def get_configutation(self) -> dict:
         with self.get_connection() as con:
@@ -195,7 +200,11 @@ class Dataset:
                 cur.execute("INSERT INTO dataset(filename, class_id, type, annotation, parent_image_id) " + \
                             "VALUES(?, ?, ?, ?, ?)", (filename, class_id, image_type, json.dumps(annotation), parent_image_id))
                 con.commit()
+                log.info("✓ Image saved: %s (class_id=%s, type=%s, id=%s)",
+                         filename, class_id, image_type, cur.lastrowid)
                 return int(cur.lastrowid)
+        log.warning("⚠ Image not saved: unknown format (%d bytes, class_id=%s)",
+                    len(image_bytes), class_id)
 
     def change_image(self, image_id: int = None, filename: str = None,
                      class_id: int = None, image_type: str = None, annotation: list = None) -> dict:
@@ -219,6 +228,7 @@ class Dataset:
             sql = sql.rstrip(",") + " WHERE id=?"
             cur.execute(sql, tuple(params + [image_id]))
             con.commit()
+            log.debug("Image updated: id=%s (class_id=%s, type=%s)", image_id, class_id, image_type)
             return dict(cur.execute("SELECT * FROM dataset WHERE id = ?", (image_id,)).fetchone())
 
     def del_image(self, image_id: int = None, filename: str = None) -> bool:
@@ -235,10 +245,12 @@ class Dataset:
             cur.execute("DELETE FROM dataset " + \
                         "WHERE id = ? OR filename = ?", (image_id, filename,))
             con.commit()
+            log.info("Image deleted: id=%s file=%s", image_id, filename)
             try:
                 os.remove(os.path.join(self.images_path, filename))
                 return True
             except FileNotFoundError:
+                log.warning("⚠ Image file missing on disk: %s", filename)
                 return False
 
     def get_image(self, image_id: int = None, filename: str = None) -> dict | None:
@@ -349,14 +361,17 @@ class Project(Dataset):
                     self.del_image(image["id"])
         for class_data in classes_conf:
             self.add_or_upd_class_conf(**class_data)
+        log.info("✓ Project saved: %s (%d classes)", self.project_path, len(classes_conf))
         if self.is_zip_project and self.original_zip_path:
             self.close_all_connections()
             self._pack_to_zip(self.original_zip_path)
+            log.info("✓ Zip project packed: %s", self.original_zip_path)
 
     def save_as(self, to_path: str) -> tuple:
         try:
             if to_path.endswith('.maclproj'):
                 self._pack_to_zip(to_path)
+                log.info("✓ Project saved as zip: %s", to_path)
                 return True, f"Проект успешно сохранён как zip-проект: {to_path}"
             else:
                 os.makedirs(to_path, exist_ok=True)

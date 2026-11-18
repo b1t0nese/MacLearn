@@ -1,0 +1,482 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SettingsWindow</class>
+ <widget class="QWidget" name="SettingsWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>580</width>
+    <height>640</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>540</width>
+    <height>600</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Настройки</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QTabWidget" name="settings_tabs">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+     <widget class="QWidget" name="tab_interface">
+      <attribute name="title">
+       <string>Интерфейс</string>
+      </attribute>
+      <layout class="QFormLayout" name="formLayout_interface">
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_language">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Язык:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QComboBox" name="combo_language"/>
+       </item>
+       <item row="1" column="0">
+        <spacer name="verticalSpacer_interface">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tab_chrome">
+      <attribute name="title">
+       <string>Chrome</string>
+      </attribute>
+      <layout class="QGridLayout" name="gridLayout_chrome">
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_chromedriver_path">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Путь к chromedriver:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="edit_chromedriver_path"/>
+       </item>
+       <item row="0" column="2">
+        <widget class="QPushButton" name="btn_browse_chromedriver">
+         <property name="text">
+          <string>Обзор...</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_chrome_version">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Версия Chrome (0 — авто):</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QSpinBox" name="spin_chrome_version">
+         <property name="maximum">
+          <number>999</number>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="label_chrome_session">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Сессия браузера:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QLineEdit" name="edit_chrome_session"/>
+       </item>
+       <item row="3" column="0" colspan="3">
+        <widget class="QCheckBox" name="check_chrome_no_headless">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Показывать окно Chrome</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="0">
+        <spacer name="verticalSpacer_chrome">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tab_annotation">
+      <attribute name="title">
+       <string>Аннотации (SAM3)</string>
+      </attribute>
+      <layout class="QGridLayout" name="gridLayout_annotation">
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_sam3_device">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Устройство:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QComboBox" name="combo_sam3_device"/>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_sam3_confidence">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Порог уверенности:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QDoubleSpinBox" name="dspin_sam3_confidence">
+         <property name="maximum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.050000000000000</double>
+         </property>
+         <property name="value">
+          <double>0.150000000000000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="label_sam3_min_area">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Мин. площадь бокса (px):</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QSpinBox" name="spin_sam3_min_area">
+         <property name="maximum">
+          <number>1000000</number>
+         </property>
+         <property name="value">
+          <number>100</number>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="0">
+        <widget class="QLabel" name="label_sam3_weights_path">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Путь к весам SAM3:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QLineEdit" name="edit_sam3_weights_path"/>
+       </item>
+       <item row="3" column="2">
+        <widget class="QPushButton" name="btn_browse_sam3_weights">
+         <property name="text">
+          <string>Обзор...</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="0" colspan="3">
+        <widget class="QCheckBox" name="check_sam3_one_detection">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Одно обнаружение на класс</string>
+         </property>
+        </widget>
+       </item>
+       <item row="5" column="0">
+        <spacer name="verticalSpacer_annotation">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tab_augmentation">
+      <attribute name="title">
+       <string>Аугментация (Albumentations)</string>
+      </attribute>
+      <layout class="QGridLayout" name="gridLayout_augmentation">
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_aug_crop">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Обрезка (crop):</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QDoubleSpinBox" name="dspin_aug_crop">
+         <property name="maximum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.050000000000000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QLabel" name="label_aug_hflip">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Горизонтальное отражение:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="3">
+        <widget class="QDoubleSpinBox" name="dspin_aug_hflip">
+         <property name="maximum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.050000000000000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_aug_vflip">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Вертикальное отражение:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QDoubleSpinBox" name="dspin_aug_vflip">
+         <property name="maximum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.050000000000000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QLabel" name="label_aug_rotate90">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Поворот на 90°:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="3">
+        <widget class="QDoubleSpinBox" name="dspin_aug_rotate90">
+         <property name="maximum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.050000000000000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="label_aug_shift_scale_rotate">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Сдвиг / масштаб / поворот:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QDoubleSpinBox" name="dspin_aug_shift_scale_rotate">
+         <property name="maximum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.050000000000000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="2">
+        <widget class="QLabel" name="label_aug_color">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Цветокоррекция:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="3">
+        <widget class="QDoubleSpinBox" name="dspin_aug_color">
+         <property name="maximum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.050000000000000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="0">
+        <widget class="QLabel" name="label_aug_noise">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Шум:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QDoubleSpinBox" name="dspin_aug_noise">
+         <property name="maximum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.050000000000000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="2">
+        <widget class="QLabel" name="label_aug_blur">
+         <property name="styleSheet">
+          <string notr="true">font-size: 13px;</string>
+         </property>
+         <property name="text">
+          <string>Размытие:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="3">
+        <widget class="QDoubleSpinBox" name="dspin_aug_blur">
+         <property name="maximum">
+          <double>1.000000000000000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.050000000000000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="0">
+        <spacer name="verticalSpacer_augmentation">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_buttons">
+     <item>
+      <spacer name="horizontalSpacer_buttons">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btn_save_settings">
+       <property name="minimumSize">
+        <size>
+         <width>120</width>
+         <height>35</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-size: 14px; font-weight: bold;</string>
+       </property>
+       <property name="text">
+        <string>Сохранить</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btn_close_settings">
+       <property name="minimumSize">
+        <size>
+         <width>120</width>
+         <height>35</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-size: 14px; font-weight: bold;</string>
+       </property>
+       <property name="text">
+        <string>Закрыть</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
