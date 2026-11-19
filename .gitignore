@@ -10,3 +10,4 @@ start.bat
 dist/
 MacLearn.spec
 *.dmg
+version.txt

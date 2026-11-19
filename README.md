@@ -62,19 +62,27 @@ python src/main.py
 
 ### Сборка
 
-```bash
-# macOS
-./scripts/build_macos\(nuitka\).sh
+Релизы собираются автоматически: **GitHub Actions** собирает macOS (.dmg) и Windows (.exe) при пуше тега `vX.Y.Z` (или `X.Y.Z`) и прикладывает их к Release.
 
-# Windows
+Локальная сборка (на выбор):
+
+```bash
+# PyInstaller (быстро, как в CI)
+./scripts/build_macos\(pyinstaller\).sh
+./scripts/build_windows\(pyinstaller\).sh
+
+# Nuitka (компиляция в C)
+./scripts/build_macos\(nuitka\).sh
 ./scripts/build_windows\(nuitka\).sh
 ```
 
 <details>
 <summary>📦 Детали сборки</summary>
 
-- macOS: `build/MacLearn.app`
-- Windows: standalone `MacLearn.exe`
+- macOS: `dist/MacLearn.app` (PyInstaller) / `build/MacLearn.app` (Nuitka) → `MacLearn.dmg`
+- Windows: standalone `dist/MacLearn.exe` (PyInstaller) / `build/MacLearn.dist/MacLearn.exe` (Nuitka)
+- Точные версии зависимостей для сборки зафиксированы в `src/requirements.lock` (CI ставит из него)
+- Версия тега записывается в бандл (`version.txt`) и видна в заголовке окна
 - Модель `sam3.pt` **не включается** в приложение и загружается отдельно в каталог данных MacLearn
 - Размер сборки определяется PyTorch, torchvision и OpenCV (необходимы для SAM3-аннотации)
 - После сборки скрипты выводят 20 крупнейших файлов для анализа занимаемого места

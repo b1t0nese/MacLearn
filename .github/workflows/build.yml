@@ -1,16 +1,21 @@
 name: Build MacLearn
 
-# Сборка onefile-банджей: macOS (.app в .dmg) и Windows (.exe) — PyInstaller не умеет
+# Сборка бандлей: macOS (.app в .dmg) и Windows (.exe) — PyInstaller не умеет
 # кросс-компиляцию, поэтому каждая платформа собирается на своём раннере.
-# При пуше тега v* оба билда публикуются в GitHub Release.
+# При пуше тега v* или X.Y.Z оба билда публикуются в GitHub Release.
 on:
   push:
     branches: [main, master]
-    tags: ["v*"]
+    tags: ["v*", "*.*.*"]
   workflow_dispatch:
 
 permissions:
   contents: write   # создание Release и загрузка ассетов по тегу
+
+# повторные пуши отменяют устаревшие запуски того же ref
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   PYTHONIOENCODING: utf-8   # Windows-консоль cp1252 не умеет ✓ и кириллицу
@@ -24,16 +29,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/requirements.lock
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r src/requirements.txt
+          pip install -r src/requirements.lock
           pip install pyinstaller
+
+      - name: Write version file
+        shell: bash
+        run: |
+          VERSION="$GITHUB_REF_NAME"
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            VERSION="dev+$(git rev-parse --short HEAD)"
+          fi
+          echo "$VERSION" > version.txt
+          echo "Building MacLearn $VERSION"
 
       - name: Import smoke check
         run: |
-          python -c "import sys; sys.path.insert(0, 'src'); import main; from interface_module import translations; assert translations.LANGUAGES, 'no translations loaded'; print('smoke ok', translations.LANGUAGES)"
+          python -c "import sys; sys.path.insert(0, 'src'); import main; from interface_module import translations; from version import get_app_version; assert translations.LANGUAGES, 'no translations loaded'; print('smoke ok', translations.LANGUAGES, get_app_version())"
 
       # add-data кладёт uis и translations в корень бандла (sys._MEIPASS/uis,
       # sys._MEIPASS/translations) — так их ищет frozen-код модулей интерфейса.
@@ -46,6 +63,7 @@ jobs:
           pyinstaller --noconfirm --clean --onedir --windowed --name MacLearn \
             --add-data "src/interface_module/uis:uis" \
             --add-data "src/interface_module/translations:translations" \
+            --add-data "version.txt:." \
             --collect-data qdarkstyle \
             --collect-data ultralytics \
             src/main.py
@@ -74,16 +92,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/requirements.lock
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r src/requirements.txt
+          pip install -r src/requirements.lock
           pip install pyinstaller
+
+      - name: Write version file
+        shell: bash
+        run: |
+          VERSION="$GITHUB_REF_NAME"
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            VERSION="dev+$(git rev-parse --short HEAD)"
+          fi
+          echo "$VERSION" > version.txt
+          echo "Building MacLearn $VERSION"
 
       - name: Import smoke check
         run: |
-          python -c "import sys; sys.path.insert(0, 'src'); import main; from interface_module import translations; assert translations.LANGUAGES, 'no translations loaded'; print('smoke ok', translations.LANGUAGES)"
+          python -c "import sys; sys.path.insert(0, 'src'); import main; from interface_module import translations; from version import get_app_version; assert translations.LANGUAGES, 'no translations loaded'; print('smoke ok', translations.LANGUAGES, get_app_version())"
 
       - name: Build onefile exe
         shell: pwsh
@@ -91,6 +121,7 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --windowed --name MacLearn `
             --add-data "src/interface_module/uis;uis" `
             --add-data "src/interface_module/translations;translations" `
+            --add-data "version.txt;." `
             --collect-data qdarkstyle `
             --collect-data ultralytics `
             src/main.py

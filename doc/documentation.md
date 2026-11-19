@@ -55,6 +55,23 @@ python -m pip install -r src/requirements.txt
 - **Chrome** (последняя версия)
 - Visual C++ Redistributable (для standalone-сборки)
 
+> **Релизы собираются автоматически**: GitHub Actions собирает macOS (.dmg) и Windows (.exe)
+> при пуше тега `vX.Y.Z` (или `X.Y.Z`) и прикладывает их к Release. Точные версии зависимостей
+> для сборки зафиксированы в `src/requirements.lock`; версия тега записывается в бандл и
+> отображается в заголовке окна.
+
+Скрипты сборки (на выбор):
+
+```bash
+# PyInstaller (быстро, как в CI)
+./scripts/build_macos\(pyinstaller\).sh
+./scripts/build_windows\(pyinstaller\).sh
+
+# Nuitka (компиляция в C)
+./scripts/build_macos\(nuitka\).sh
+./scripts/build_windows\(nuitka\).sh
+```
+
 ### Windows
 
 ```bash

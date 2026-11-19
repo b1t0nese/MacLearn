@@ -22,6 +22,7 @@ from pcfuncs import *
 from project_module.dataset_manager import AVAILABLE_FORMATS
 from project_module.project_manager import Project, get_dataset_statistics
 from settings import load_settings, save_settings
+from version import get_app_version
 
 log = get_logger("main")
 session = SessionLogger("main")
@@ -50,7 +51,8 @@ class App:
 
         config_info = {k: v for k, v in config.items() if v is not None}
         config_info.pop("project_path", None)
-        session.start(extra={"project_path": config["project_path"], **config_info})
+        session.start(extra={"version": get_app_version(),
+                             "project_path": config["project_path"], **config_info})
         if self.config["project_path"]:
             self.open_project(self.config["project_path"])
         else:

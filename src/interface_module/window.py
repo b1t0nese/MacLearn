@@ -620,6 +620,8 @@ class MainWindowUI(QMainWindow):
 
     def initUI(self):
         loadUi(os.path.join(uis_path, "mainwindow.ui"), self)
+        from version import get_app_version
+        self.setWindowTitle(f"{self.windowTitle()} {get_app_version()}")
         self.project_initUI()
         self.dataset_initUI()
         self.autodataset_initUI()
